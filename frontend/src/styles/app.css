@@ -1,0 +1,219 @@
+:root {
+  --bg: #10131a;
+  --surface: #1a1e28;
+  --text: #f2f3f5;
+  --muted: #8b93a7;
+  --accent: #3a6df0;
+  --success: #22a26b;
+  --danger: #d9483a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  padding: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.balance-pill {
+  background: var(--surface);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.app-main {
+  flex: 1;
+  padding: 0 16px 16px;
+}
+
+.app-tabs {
+  display: flex;
+  border-top: 1px solid #262b38;
+}
+
+.app-tabs button {
+  flex: 1;
+  padding: 14px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.app-tabs button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Spin wheel */
+.spin-wheel-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding-top: 24px;
+}
+
+.spin-wheel-wrap {
+  position: relative;
+  width: 260px;
+  height: 260px;
+}
+
+.spin-wheel {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  position: relative;
+  box-shadow: 0 0 0 6px var(--surface);
+}
+
+.spin-wheel-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 0;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  margin-left: -12px;
+  margin-top: -100px;
+}
+
+.spin-wheel-pointer {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 18px solid #fff;
+  z-index: 2;
+}
+
+.spin-button, .claim-button, .wallet-form button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 14px 20px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  width: 100%;
+  max-width: 320px;
+}
+
+.spin-button:disabled, .claim-button:disabled, .wallet-form button:disabled {
+  background: #34394a;
+  color: var(--muted);
+}
+
+.spin-result { color: var(--success); font-weight: 600; }
+.spin-error, .referral-error, .wallet-error { color: var(--danger); }
+
+/* Referral dashboard */
+.referral-dashboard { padding-top: 16px; }
+
+.referral-link-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.referral-link-row input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #262b38;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.referral-link-row button {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  padding: 0 14px;
+}
+
+.referral-stats {
+  display: flex;
+  gap: 24px;
+  margin: 16px 0;
+}
+
+.referral-stats .stat-value { display: block; font-size: 22px; font-weight: 700; }
+.referral-stats .stat-label { color: var(--muted); font-size: 12px; }
+
+/* Wallet */
+.wallet-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.wallet-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.wallet-form input {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #262b38;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.field-error { color: var(--danger); font-size: 12px; }
+
+.wallet-history { list-style: none; padding: 0; }
+
+.wallet-history-item {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.wallet-history-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.status-badge {
+  margin-left: 10px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.status-badge.status-pending { background: #4a3d1a; color: #e0a72e; }
+.status-badge.status-completed { background: #16382a; color: var(--success); }
+.status-badge.status-rejected { background: #3a1e1e; color: var(--danger); }
