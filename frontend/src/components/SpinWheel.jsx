@@ -3,14 +3,29 @@ import { api } from '../api';
 
 // Order/colors must match backend SEGMENTS in services/spinService.js
 const SEGMENTS = [
-  { index: 1, label: '0', color: '#2b2f3a' },
-  { index: 2, label: '25', color: '#3a6df0' },
-  { index: 3, label: '50', color: '#22a26b' },
-  { index: 4, label: '100', color: '#e0a72e' },
-  { index: 5, label: '200', color: '#c8542f' },
-  { index: 6, label: '1000', color: '#b03bd6' },
+  { index: 1, label: '0', color: '#1b2130' },
+  { index: 2, label: '25', color: '#2a3550' },
+  { index: 3, label: '50', color: '#3a4a70' },
+  { index: 4, label: '100', color: '#8a6a2a' },
+  { index: 5, label: '200', color: '#b5822e' },
+  { index: 6, label: '1000', color: '#e8a33d' },
 ];
 const SEGMENT_ANGLE = 360 / SEGMENTS.length;
+const SIZE = 300;
+const CENTER = SIZE / 2;
+const RADIUS = CENTER - 6;
+const LABEL_RADIUS = RADIUS * 0.62;
+
+function polarPoint(angleDeg, radius) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180; // -90 so 0deg points to 12 o'clock
+  return { x: CENTER + radius * Math.cos(rad), y: CENTER + radius * Math.sin(rad) };
+}
+
+function wedgePath(startAngle, endAngle) {
+  const start = polarPoint(startAngle, RADIUS);
+  const end = polarPoint(endAngle, RADIUS);
+  return `M ${CENTER},${CENTER} L ${start.x},${start.y} A ${RADIUS},${RADIUS} 0 0,1 ${end.x},${end.y} Z`;
+}
 
 /**
  * NOTE on adToken: this assumes your Adsgram integration returns something
@@ -36,14 +51,17 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
 
   const canAfford = mainBalance >= 100;
 
-  const wedgeStyle = useMemo(() => {
-    const gradientStops = SEGMENTS.map((seg, i) => {
-      const start = i * SEGMENT_ANGLE;
-      const end = start + SEGMENT_ANGLE;
-      return `${seg.color} ${start}deg ${end}deg`;
-    }).join(', ');
-    return { background: `conic-gradient(${gradientStops})` };
-  }, []);
+  const wedges = useMemo(
+    () =>
+      SEGMENTS.map((seg, i) => {
+        const start = i * SEGMENT_ANGLE;
+        const end = start + SEGMENT_ANGLE;
+        const mid = start + SEGMENT_ANGLE / 2;
+        const labelPos = polarPoint(mid, LABEL_RADIUS);
+        return { ...seg, path: wedgePath(start, end), labelPos, mid };
+      }),
+    []
+  );
 
   async function handleSpin() {
     if (spinning || !canAfford) return;
@@ -53,8 +71,6 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       const adToken = await showRewardedAd();
       const result = await api.playSpin(adToken);
 
-      // Visual spin: land the pointer on the winning segment, with extra
-      // full rotations for effect.
       const targetSegment = SEGMENTS.find((s) => s.index === result.segment_index);
       const targetIndex = SEGMENTS.indexOf(targetSegment);
       const segmentCenter = targetIndex * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
@@ -77,24 +93,34 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
     <div className="spin-wheel-container">
       <div className="spin-wheel-wrap">
         <div className="spin-wheel-pointer" />
-        <div
-          className="spin-wheel"
+        <svg
+          className="spin-wheel-svg"
+          viewBox={`0 0 ${SIZE} ${SIZE}`}
           style={{
-            ...wedgeStyle,
             transform: `rotate(${rotation}deg)`,
             transition: spinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.3, 1)' : 'none',
           }}
         >
-          {SEGMENTS.map((seg, i) => (
-            <span
-              key={seg.index}
-              className="spin-wheel-label"
-              style={{ transform: `rotate(${i * SEGMENT_ANGLE + SEGMENT_ANGLE / 2}deg)` }}
-            >
-              {seg.label}
-            </span>
+          {wedges.map((w) => (
+            <g key={w.index}>
+              <path d={w.path} fill={w.color} stroke="#0b0e14" strokeWidth="2" />
+              <text
+                x={w.labelPos.x}
+                y={w.labelPos.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                transform={`rotate(${w.mid}, ${w.labelPos.x}, ${w.labelPos.y})`}
+                fontFamily="'JetBrains Mono', monospace"
+                fontWeight="600"
+                fontSize={w.label.length > 2 ? 22 : 26}
+                fill={w.index >= 5 ? '#16130a' : '#edeff3'}
+              >
+                {w.label}
+              </text>
+            </g>
           ))}
-        </div>
+          <circle cx={CENTER} cy={CENTER} r={22} className="spin-wheel-hub" />
+        </svg>
       </div>
 
       <button className="spin-button" onClick={handleSpin} disabled={spinning || !canAfford}>

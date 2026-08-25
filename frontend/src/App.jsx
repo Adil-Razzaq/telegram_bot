@@ -8,19 +8,29 @@ export default function App() {
   const [tab, setTab] = useState('spin');
   const [mainBalance, setMainBalance] = useState(0);
   const [telegramId, setTelegramId] = useState(null);
+  const [displayName, setDisplayName] = useState(null);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     tg?.ready();
     tg?.expand();
     const user = tg?.initDataUnsafe?.user;
-    if (user) setTelegramId(user.id);
+    if (user) {
+      setTelegramId(user.id);
+      setDisplayName(user.username ? `@${user.username}` : user.first_name || 'Player');
+    }
   }, []);
+
+  const initial = (displayName || 'P').replace('@', '')[0]?.toUpperCase() || 'P';
 
   return (
     <div className="app">
       <header className="app-header">
-        <span className="balance-pill">{mainBalance} pts</span>
+        <div className="user-chip">
+          <span className="user-avatar">{initial}</span>
+          <span className="user-name">{displayName || 'Player'}</span>
+        </div>
+        <span className="balance-pill num">{mainBalance} pts</span>
       </header>
 
       <main className="app-main">

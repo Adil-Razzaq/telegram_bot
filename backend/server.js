@@ -11,7 +11,6 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 app.use(cors());
-app.set('trust proxy', 1);   // <-- add this line: trust Back4App's single reverse-proxy hop
 app.use(express.json());
 
 // Global rate limit as a baseline defense; per-route limits (e.g. the 60s

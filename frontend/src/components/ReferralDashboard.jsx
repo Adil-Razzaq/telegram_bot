@@ -11,7 +11,9 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const timerRef = useRef(null);
 
-  const refLink = telegramId ? `https://t.me/YourBot?start=ref_${telegramId}` : '';
+  const botUsername = import.meta.env?.VITE_BOT_USERNAME;
+  const refLink =
+    telegramId && botUsername ? `https://t.me/${botUsername}?start=ref_${telegramId}` : null;
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -62,7 +64,7 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
   }
 
   function copyLink() {
-    navigator.clipboard?.writeText(refLink);
+    if (refLink) navigator.clipboard?.writeText(refLink);
   }
 
   if (!status) {
@@ -81,8 +83,14 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
       <h2>Invite friends, earn points</h2>
 
       <div className="referral-link-row">
-        <input readOnly value={refLink} onFocus={(e) => e.target.select()} />
-        <button onClick={copyLink}>Copy</button>
+        <input
+          readOnly
+          value={refLink || 'Set VITE_BOT_USERNAME to generate your link'}
+          onFocus={(e) => e.target.select()}
+        />
+        <button onClick={copyLink} disabled={!refLink}>
+          Copy
+        </button>
       </div>
 
       <div className="referral-stats">
