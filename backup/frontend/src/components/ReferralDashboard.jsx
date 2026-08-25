@@ -49,9 +49,10 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
     try {
       if (!window.Adsgram) throw new Error('Adsgram SDK not loaded');
       const AdController = window.Adsgram.init({ blockId: import.meta.env?.VITE_ADSGRAM_BLOCK_ID });
-      await AdController.show();
+      const result = await AdController.show();
+      const adToken = result?.token || result?.rewardToken || null;
 
-      const claimResult = await api.claimReferral();
+      const claimResult = await api.claimReferral(adToken);
       setStatus((prev) => ({ ...prev, ...claimResult }));
       onBalanceChange(claimResult.main_balance);
       setSecondsLeft(COOLDOWN_SECONDS);

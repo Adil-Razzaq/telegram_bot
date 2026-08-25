@@ -15,8 +15,7 @@ const app = express();
 app.use(helmet());
 
 // Only your actual frontend can call this API — set FRONTEND_URL in
-// Render's env vars to your Vercel URL. Falls back to allow-all if unset
-// (fine for local dev, not for production).
+// Render's env vars to your Vercel URL. Falls back to allow-all in dev.
 const allowedOrigin = process.env.FRONTEND_URL;
 app.use(cors(allowedOrigin ? { origin: allowedOrigin } : {}));
 
@@ -39,9 +38,6 @@ app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/bot', botRoutes);
 
-// Central error handler. In production, unexpected (non-statusCode) errors
-// return a generic message instead of the raw error text, so internal
-// details never leak to a client.
 app.use((err, req, res, next) => {
   console.error(err);
   const isProd = process.env.NODE_ENV === 'production';
@@ -53,7 +49,6 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 
-// Create tables on Turso if they don't exist yet, then start accepting traffic.
 migrate()
   .then(() => {
     app.listen(PORT, () => console.log(`API listening on :${PORT}`));

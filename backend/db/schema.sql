@@ -6,10 +6,18 @@
 
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
+    username TEXT,
     main_balance INTEGER DEFAULT 0,
     pending_referral_balance INTEGER DEFAULT 0,
     daily_ref_claims_count INTEGER DEFAULT 0,
     last_ref_claim_at DATETIME,
+    -- ADDED: last spin timestamp, used as a minimum-interval abuse check
+    -- (see notes in utils/adsgram.js on why this exists instead of a
+    -- verified ad token — Adsgram doesn't issue one at this traffic tier)
+    last_spin_at DATETIME,
+    -- ADDED: who referred this user, set once on their first /start.
+    -- This is what makes referral crediting reliable and idempotent.
+    referred_by INTEGER,
     -- ADDED: lets us lazily reset daily_ref_claims_count once per calendar day
     daily_ref_reset_date TEXT DEFAULT (date('now')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -52,5 +60,17 @@ CREATE TABLE IF NOT EXISTS ledger (
 
 CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
 CREATE INDEX IF NOT EXISTS idx_ledger_telegram_id ON ledger(telegram_id);
+
+-- ADDED: Adsgram's optional "Reward URL" pings this with ?userid=<telegramId>
+-- after independently confirming an ad was watched (see utils/adsgram.js).
+-- We log it rather than gate on it, since Adsgram only recommends wiring
+-- this up once you're past ~50k daily users — logging it now costs
+-- nothing and gives you a real audit trail to compare "claims made" vs
+-- "ad views Adsgram actually confirmed" once volume picks up.
+CREATE TABLE IF NOT EXISTS ad_reward_pings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER NOT NULL,
+    received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

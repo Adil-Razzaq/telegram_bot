@@ -6,11 +6,9 @@ const DAILY_CLAIM_CAP = 20;
 const COOLDOWN_SECONDS = 60;
 
 // Called from the bot's /start handler (routes/bot.js) the moment a
-// referred user first opens the bot — this is what was missing before:
-// nothing was ever calling this, so no referral was ever credited no
-// matter how correct the claim/cooldown logic downstream was.
+// referred user first opens the bot — this is what was missing before.
 // Idempotent via users.referred_by: a user can only ever be credited to
-// one referrer, once, no matter how many times /start fires for them.
+// one referrer, once, no matter how many times /start fires.
 async function grantReferral({ referrerId, referredTelegramId }) {
   if (referrerId === referredTelegramId) {
     const err = new Error('Self-referral is not allowed');

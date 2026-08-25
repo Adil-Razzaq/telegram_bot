@@ -1,5 +1,5 @@
 const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
-const { checkMinInterval } = require('../utils/adsgram');
+const { verifyAdCompletion } = require('../utils/adsgram');
 
 const ENTRY_FEE = 100;
 
@@ -51,8 +51,15 @@ function pickSegment(pool) {
  * Plays one spin for telegramId. Throws Error with .statusCode for the
  * route layer to translate into an HTTP response.
  */
-async function playSpin({ telegramId }) {
+async function playSpin({ telegramId, adToken }) {
   await rolloverDailyCountersIfNeeded();
+
+  const adCheck = verifyAdCompletion({ telegramId, adToken, purpose: 'spin' });
+  if (!adCheck.ok) {
+    const err = new Error(`Ad verification failed: ${adCheck.reason}`);
+    err.statusCode = 400;
+    throw err;
+  }
 
   const tx = await client.transaction('write');
   try {
@@ -66,27 +73,15 @@ async function playSpin({ telegramId }) {
       err.statusCode = 404;
       throw err;
     }
-
-    const intervalCheck = await checkMinInterval({
-      telegramId,
-      action: 'spin',
-      lastTimestamp: user.last_spin_at,
-    });
-    if (!intervalCheck.ok) {
-      const err = new Error(`Spinning too fast — ${intervalCheck.reason}`);
-      err.statusCode = 429;
-      throw err;
-    }
-
     if (user.main_balance < ENTRY_FEE) {
       const err = new Error('Insufficient balance for spin entry fee');
       err.statusCode = 400;
       throw err;
     }
 
-    // 1. Deduct entry fee from user, stamp last_spin_at, add to pool + daily_collected
+    // 1. Deduct entry fee from user, add to pool + daily_collected
     await tx.execute({
-      sql: 'UPDATE users SET main_balance = main_balance - ?, last_spin_at = CURRENT_TIMESTAMP WHERE telegram_id = ?',
+      sql: 'UPDATE users SET main_balance = main_balance - ? WHERE telegram_id = ?',
       args: [ENTRY_FEE, telegramId],
     });
     await tx.execute({

@@ -1,83 +1,67 @@
-const crypto = require('crypto');
+const { client } = require('../db/db');
 
 /**
- * IMPORTANT: Adsgram's exact server-side reward-verification contract
- * (webhook payload / signature scheme) isn't something to guess at here —
- * confirm it against Adsgram's current publisher docs before going live,
- * since ad-network APIs change and a wrong assumption here is a direct
- * hole in your economic model (anyone could fake ad completions and mint
- * points for free).
+ * WHAT ADSGRAM ACTUALLY GIVES YOU (confirmed against their docs at
+ * docs.adsgram.ai/publisher/api-reference and .../get-block-id — this
+ * replaces an earlier version of this file that assumed a signed token,
+ * which isn't how Adsgram works):
  *
- * This module gives you one place to plug that in. Two strategies are
- * supported out of the box; pick whichever matches what Adsgram gives you:
+ * - `AdController.show()` on the frontend resolves/rejects a Promise
+ *   based on whether the user watched the ad. It does NOT hand back a
+ *   token, signature, or anything else your backend can independently
+ *   verify. That promise result is inherently a client-side claim —
+ *   anyone who opens devtools can call your API and claim they watched
+ *   an ad without ever loading one.
+ * - Adsgram DOES offer an optional server-to-server "Reward URL": once
+ *   you're doing real volume (they specifically say "makes sense for
+ *   publishers who have more than 50k daily average users"), you set a
+ *   URL like `https://yourapp.com/bot/adsgram-reward?userid=[userId]` in
+ *   their dashboard and they GET it after confirming a real ad view.
+ *   There's no per-request nonce or signature in that callback — just
+ *   the Telegram user id — so it can't be tied to one specific spin or
+ *   claim, only used as an independent audit signal ("did Adsgram think
+ *   this user watched N ads today").
  *
- * 1. SERVER-TO-SERVER CALLBACK (recommended): Adsgram calls YOUR backend
- *    directly when a user finishes a rewarded ad, signed with a shared
- *    secret. You'd store a short-lived "reward ticket" in a table/cache
- *    keyed by (telegram_id, purpose) when that callback arrives, and
- *    verifyAdCompletion() below just checks the ticket exists and hasn't
- *    been consumed yet.
+ * Given that, real protection here is:
+ *   1. Require a valid, HMAC-verified Telegram initData (already true
+ *      for every route via telegramAuth) — so at minimum this is a real
+ *      Telegram user, not an anonymous script.
+ *   2. A minimum-interval check between spins/claims (below) — a crude
+ *      but honest heuristic: a real rewarded ad takes several seconds,
+ *      so back-to-back requests faster than that are almost certainly
+ *      scripted, not a fast human.
+ *   3. Log Adsgram's Reward URL pings (see routes/bot.js) into
+ *      ad_reward_pings so you can periodically compare "rewards claimed"
+ *      vs "ad views Adsgram confirmed" per user and flag outliers by
+ *      hand — this is detection, not prevention, but it's the honest
+ *      ceiling of what's available without paid ad-network tiers.
  *
- * 2. CLIENT-SUBMITTED TOKEN + SIGNATURE: the frontend gets a signed token
- *    back from the Adsgram SDK after ad completion and sends it to your
- *    API. verifyAdCompletion() checks the signature against
- *    ADSGRAM_VERIFY_SECRET. This is weaker (a compromised client secret
- *    or replay of a captured token is a risk) — prefer strategy 1 if
- *    Adsgram supports it.
- *
- * The stub below implements strategy 2 defensively (signature + one-time
- * use via the `usedAdTokens` in-memory set) so the rest of the app has a
- * concrete contract to call. Swap the body out once you've confirmed
- * Adsgram's real payload shape.
+ * None of this is airtight. If/when abuse becomes a real cost, the
+ * generally-accepted patterns are: cap total daily payout per user
+ * tightly (you already do, for referrals), and/or move to an ad network
+ * that does give you a verifiable server callback per impression.
  */
 
-const usedAdTokens = new Set(); // swap for a DB/Redis table in production (multi-process safe)
+const MIN_INTERVAL_SECONDS = {
+  spin: 8,
+  referral_claim: 8,
+};
 
-function verifyAdCompletion({ telegramId, adToken, purpose }) {
-  if (!adToken || typeof adToken !== 'string') {
-    return { ok: false, reason: 'missing_token' };
+async function checkMinInterval({ telegramId, action, lastTimestamp }) {
+  const minSeconds = MIN_INTERVAL_SECONDS[action] || 5;
+  if (!lastTimestamp) return { ok: true };
+  const elapsed = (Date.now() - new Date(lastTimestamp).getTime()) / 1000;
+  if (elapsed < minSeconds) {
+    return { ok: false, reason: `too_fast (${Math.ceil(minSeconds - elapsed)}s remaining)` };
   }
-  if (usedAdTokens.has(adToken)) {
-    return { ok: false, reason: 'token_already_used' };
-  }
-
-  const secret = process.env.ADSGRAM_VERIFY_SECRET;
-  if (!secret) {
-    return { ok: false, reason: 'server_misconfigured' };
-  }
-
-  // Expected token shape: base64(payload).hex(hmac)
-  const [payloadB64, sig] = adToken.split('.');
-  if (!payloadB64 || !sig) {
-    return { ok: false, reason: 'malformed_token' };
-  }
-
-  const expectedSig = crypto.createHmac('sha256', secret).update(payloadB64).digest('hex');
-  const sigBuf = Buffer.from(sig, 'hex');
-  const expectedBuf = Buffer.from(expectedSig, 'hex');
-  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return { ok: false, reason: 'bad_signature' };
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
-  } catch (e) {
-    return { ok: false, reason: 'bad_payload' };
-  }
-
-  if (String(payload.telegramId) !== String(telegramId)) {
-    return { ok: false, reason: 'user_mismatch' };
-  }
-  if (purpose && payload.purpose !== purpose) {
-    return { ok: false, reason: 'purpose_mismatch' };
-  }
-  if (!payload.ts || Date.now() / 1000 - payload.ts > 300) {
-    return { ok: false, reason: 'token_expired' };
-  }
-
-  usedAdTokens.add(adToken);
   return { ok: true };
 }
 
-module.exports = { verifyAdCompletion };
+async function recordRewardPing(telegramId) {
+  await client.execute({
+    sql: 'INSERT INTO ad_reward_pings (telegram_id) VALUES (?)',
+    args: [telegramId],
+  });
+}
+
+module.exports = { checkMinInterval, recordRewardPing, MIN_INTERVAL_SECONDS };

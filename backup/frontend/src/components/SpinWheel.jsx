@@ -28,16 +28,19 @@ function wedgePath(startAngle, endAngle) {
 }
 
 /**
- * Gates the spin on actually watching the ad. Once you have real Adsgram
- * credentials, paste their integration snippet in here — this wraps
- * whatever they give you so the rest of the component doesn't change.
+ * NOTE on adToken: this assumes your Adsgram integration returns something
+ * the backend can verify (see backend/utils/adsgram.js — confirm the exact
+ * shape against Adsgram's current publisher docs before shipping; this
+ * component treats it as an opaque string so swapping strategies later
+ * only touches showRewardedAd()).
  */
-async function watchRewardedAd() {
+async function showRewardedAd() {
   if (!window.Adsgram) {
     throw new Error('Adsgram SDK not loaded');
   }
   const AdController = window.Adsgram.init({ blockId: import.meta.env?.VITE_ADSGRAM_BLOCK_ID });
-  await AdController.show(); // resolves only if the user watched it through; throws otherwise
+  const result = await AdController.show(); // resolves on completed view, rejects on skip/error
+  return result?.token || result?.rewardToken || null;
 }
 
 export default function SpinWheel({ mainBalance, onBalanceChange }) {
@@ -65,8 +68,8 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
     setError(null);
     setSpinning(true);
     try {
-      await watchRewardedAd();
-      const result = await api.playSpin();
+      const adToken = await showRewardedAd();
+      const result = await api.playSpin(adToken);
 
       const targetSegment = SEGMENTS.find((s) => s.index === result.segment_index);
       const targetIndex = SEGMENTS.indexOf(targetSegment);

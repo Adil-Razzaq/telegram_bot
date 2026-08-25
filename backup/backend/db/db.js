@@ -18,36 +18,10 @@ const client = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// Columns that have been added to users/spin_pool over time. migrate()
-// checks each one against the live database and ALTERs it in if missing —
-// this is what makes it safe to redeploy after a schema change without a
-// manual migration step, whether the database is brand new or already has
-// data in it.
-const COLUMNS_TO_ENSURE = [
-  { table: 'users', column: 'username', ddl: 'TEXT' },
-  { table: 'users', column: 'last_spin_at', ddl: 'DATETIME' },
-  { table: 'users', column: 'referred_by', ddl: 'INTEGER' },
-];
-
-async function ensureColumn(table, column, ddl) {
-  const info = await client.execute(`PRAGMA table_info(${table})`);
-  const exists = info.rows.some((row) => row.name === column);
-  if (!exists) {
-    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
-    console.log(`migrate: added missing column ${table}.${column}`);
-  }
-}
-
 async function migrate() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-  // libSQL's executeMultiple runs a whole .sql file of statements at once.
-  // CREATE TABLE IF NOT EXISTS handles brand-new tables fine, but it's a
-  // no-op on a table that already exists — it will NOT add new columns to
-  // it. That's what the loop below is for.
+  // libSQL's executeMultiple runs a whole .sql file of statements at once
   await client.executeMultiple(schema);
-  for (const { table, column, ddl } of COLUMNS_TO_ENSURE) {
-    await ensureColumn(table, column, ddl);
-  }
 }
 
 async function rolloverDailyCountersIfNeeded() {
