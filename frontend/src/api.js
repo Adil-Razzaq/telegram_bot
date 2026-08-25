@@ -5,11 +5,20 @@ function getInitData() {
 }
 
 async function apiCall(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  // 1. Cache-busting: Append timestamp to GET requests so Telegram doesn't cache them
+  let targetUrl = `${API_BASE}${path}`;
+  if (method === 'GET') {
+    const separator = targetUrl.includes('?') ? '&' : '?';
+    targetUrl = `${targetUrl}${separator}_t=${Date.now()}`;
+  }
+
+  const res = await fetch(targetUrl, {
     method,
+    cache: 'no-store', // 2. Forces browser/Vercel to ignore local cache and pull live data
     headers: {
       'Content-Type': 'application/json',
       'X-Telegram-Init-Data': getInitData(),
+      'Cache-Control': 'no-cache', // 3. Explictly tells proxies/servers not to cache
     },
     body: body ? JSON.stringify(body) : undefined,
   });
