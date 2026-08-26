@@ -12,6 +12,7 @@ const adminRoutes = require('./routes/admin');
 const botRoutes = require('./routes/bot');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(helmet());
 
 // Only your actual frontend can call this API — set FRONTEND_URL in

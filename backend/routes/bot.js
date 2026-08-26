@@ -77,7 +77,7 @@ router.get('/monetag-postback/:secret', async (req, res) => {
 
   const { ymid, reward_event_type } = req.query;
   console.log('Monetag postback received:', { ymid, reward_event_type, fullQuery: req.query });
-  if (reward_event_type === 'yes' && ymid) {
+  if (reward_event_type === 'valued' && ymid) {
     const confirmed = await confirmAdEvent({ nonce: ymid });
     console.log('Postback confirmAdEvent result:', confirmed);
   }
