@@ -27,9 +27,11 @@ async function apiCall(path, { method = 'GET', body } = {}) {
 }
 
 export const api = {
-  playSpin: () => apiCall('/spin/play', { method: 'POST' }),
+  prepareSpin: () => apiCall('/spin/prepare', { method: 'POST' }),
+  playSpin: (nonce) => apiCall('/spin/play', { method: 'POST', body: { nonce } }),
   referralStatus: () => apiCall('/referral/status'),
-  claimReferral: () => apiCall('/referral/claim', { method: 'POST' }),
+  prepareClaim: () => apiCall('/referral/prepare-claim', { method: 'POST' }),
+  claimReferral: (nonce) => apiCall('/referral/claim', { method: 'POST', body: { nonce } }),
   requestWithdrawal: (address, points) =>
     apiCall('/withdrawal/request', { method: 'POST', body: { address, points } }),
   withdrawalHistory: () => apiCall('/withdrawal/history'),

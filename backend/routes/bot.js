@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { client } = require('../db/db');
 const { grantReferral } = require('../services/referralService');
-const { recordRewardPing } = require('../utils/adsgram');
+const { confirmAdEvent } = require('../utils/monetagAds');
 
 const router = express.Router();
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
@@ -61,12 +61,26 @@ router.post('/webhook/:secret', async (req, res) => {
   }
 });
 
-// Adsgram's optional Reward URL pings this — see utils/adsgram.js for
-// what this can and can't be trusted for.
-router.get('/adsgram-reward', async (req, res) => {
-  const userid = Number(req.query.userid);
-  if (!userid) return res.sendStatus(400);
-  await recordRewardPing(userid);
+// Monetag calls this after independently confirming an ad event — set
+// this exact URL (with your own secret) as the Postback URL for each ad
+// zone in the Monetag dashboard: one URL per format is fine, they all
+// hit the same handler. The :secret segment is what stops someone from
+// hitting this endpoint directly and faking a reward — see monetagAds.js
+// for why that matters (Monetag's postback itself carries no signature).
+router.get('/monetag-postback/:secret', async (req, res) => {
+  const expected = process.env.MONETAG_POSTBACK_SECRET || '';
+  const provided = req.params.secret || '';
+  const same =
+    Buffer.byteLength(provided) === Buffer.byteLength(expected) &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  if (!expected || !same) return res.sendStatus(404);
+
+  const { ymid, reward_event_type } = req.query;
+  if (reward_event_type === 'valued' && ymid) {
+    await confirmAdEvent({ nonce: ymid });
+  }
+  // Always 200 — a non-'valued' event (filtered/fraud) or missing nonce
+  // isn't an error, just nothing to confirm. Monetag retries on non-200.
   res.sendStatus(200);
 });
 

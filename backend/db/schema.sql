@@ -73,4 +73,31 @@ CREATE TABLE IF NOT EXISTS ad_reward_pings (
     received_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ADDED: tracks completed Task-format ads (Adsgram's native ad unit — e.g.
+-- "join this channel"). Each row is one user completing one task, ever —
+-- the UNIQUE constraint is what stops a task from being claimed twice.
+CREATE TABLE IF NOT EXISTS task_completions (
+    telegram_id INTEGER NOT NULL,
+    task_id TEXT NOT NULL,
+    completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (telegram_id, task_id)
+);
+
+-- ADDED: tracks a rewarded-ad flow from start to confirmation. A row is
+-- created (status='pending') right before the frontend shows a Monetag
+-- ad, carrying a random nonce as the `ymid` Monetag echoes back in its
+-- postback. Only once Monetag's own server confirms the ad was watched
+-- (status='confirmed') can that nonce be spent on a spin or referral
+-- claim — this is what makes the reward server-verified instead of a
+-- client-side promise the frontend could fake by just calling the API.
+CREATE TABLE IF NOT EXISTS pending_ad_events (
+    nonce TEXT PRIMARY KEY,
+    telegram_id INTEGER NOT NULL,
+    action TEXT NOT NULL, -- 'spin' | 'referral_claim'
+    status TEXT CHECK(status IN ('pending', 'confirmed', 'consumed')) DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_pending_ad_events_telegram ON pending_ad_events(telegram_id);
+
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

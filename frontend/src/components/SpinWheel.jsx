@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
+import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
 // Order/colors must match backend SEGMENTS in services/spinService.js
 const SEGMENTS = [
@@ -28,17 +29,11 @@ function wedgePath(startAngle, endAngle) {
 }
 
 /**
- * Gates the spin on actually watching the ad. Once you have real Adsgram
- * credentials, paste their integration snippet in here — this wraps
- * whatever they give you so the rest of the component doesn't change.
+ * Gates the spin on: getting a nonce from the backend, showing the
+ * Monetag ad with that nonce as ymid, then spending the nonce — which
+ * only succeeds once Monetag's postback has confirmed it server-side
+ * (see backend/utils/monetagAds.js).
  */
-async function watchRewardedAd() {
-  if (!window.Adsgram) {
-    throw new Error('Adsgram SDK not loaded');
-  }
-  const AdController = window.Adsgram.init({ blockId: import.meta.env?.VITE_ADSGRAM_BLOCK_ID });
-  await AdController.show(); // resolves only if the user watched it through; throws otherwise
-}
 
 export default function SpinWheel({ mainBalance, onBalanceChange }) {
   const [spinning, setSpinning] = useState(false);
@@ -65,8 +60,9 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
     setError(null);
     setSpinning(true);
     try {
-      await watchRewardedAd();
-      const result = await api.playSpin();
+      const { nonce } = await api.prepareSpin();
+      await showRewardedAd(nonce);
+      const result = await withConfirmationRetry(() => api.playSpin(nonce));
 
       const targetSegment = SEGMENTS.find((s) => s.index === result.segment_index);
       const targetIndex = SEGMENTS.indexOf(targetSegment);

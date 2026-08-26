@@ -1,5 +1,5 @@
 const { client, rolloverUserRefCounterIfNeeded } = require('../db/db');
-const { checkMinInterval } = require('../utils/adsgram');
+const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 
 const REFERRAL_BASE_REWARD = 500;
 const DAILY_CLAIM_CAP = 20;
@@ -64,8 +64,13 @@ async function grantReferral({ referrerId, referredTelegramId }) {
   }
 }
 
-async function claimReferral({ telegramId }) {
+async function prepareClaim({ telegramId }) {
+  return startAdEvent({ telegramId, action: 'referral_claim' });
+}
+
+async function claimReferral({ telegramId, nonce }) {
   await rolloverUserRefCounterIfNeeded(telegramId);
+  await consumeAdEvent({ nonce, telegramId, action: 'referral_claim' });
 
   const tx = await client.transaction('write');
   try {
@@ -80,16 +85,6 @@ async function claimReferral({ telegramId }) {
       throw err;
     }
 
-    const intervalCheck = await checkMinInterval({
-      telegramId,
-      action: 'referral_claim',
-      lastTimestamp: user.last_ref_claim_at,
-    });
-    if (!intervalCheck.ok) {
-      const err = new Error(`Claiming too fast — ${intervalCheck.reason}`);
-      err.statusCode = 429;
-      throw err;
-    }
     if (user.pending_referral_balance < REFERRAL_BASE_REWARD) {
       const err = new Error('No pending referral reward to claim');
       err.statusCode = 400;
@@ -134,4 +129,4 @@ async function claimReferral({ telegramId }) {
   }
 }
 
-module.exports = { grantReferral, claimReferral, REFERRAL_BASE_REWARD, DAILY_CLAIM_CAP, COOLDOWN_SECONDS };
+module.exports = { grantReferral, prepareClaim, claimReferral, REFERRAL_BASE_REWARD, DAILY_CLAIM_CAP, COOLDOWN_SECONDS };

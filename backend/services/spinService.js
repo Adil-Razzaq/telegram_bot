@@ -1,5 +1,5 @@
 const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
-const { checkMinInterval } = require('../utils/adsgram');
+const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 
 const ENTRY_FEE = 100;
 
@@ -51,8 +51,24 @@ function pickSegment(pool) {
  * Plays one spin for telegramId. Throws Error with .statusCode for the
  * route layer to translate into an HTTP response.
  */
-async function playSpin({ telegramId }) {
+async function prepareSpin({ telegramId }) {
+  return startAdEvent({ telegramId, action: 'spin' });
+}
+
+/**
+ * Plays one spin for telegramId. `nonce` must be a Monetag-confirmed ad
+ * event from prepareSpin() — consumeAdEvent throws if it's missing,
+ * unconfirmed, expired, or already used. Throws Error with .statusCode
+ * for the route layer to translate into an HTTP response.
+ */
+async function playSpin({ telegramId, nonce }) {
   await rolloverDailyCountersIfNeeded();
+
+  // Consumed before the balance transaction: if the spin later fails
+  // (e.g. insufficient balance), the ad view is "spent" either way —
+  // that's an acceptable tradeoff for keeping this atomic and simple,
+  // and it's not exploitable (a wasted ad view costs the user, not us).
+  await consumeAdEvent({ nonce, telegramId, action: 'spin' });
 
   const tx = await client.transaction('write');
   try {
@@ -64,17 +80,6 @@ async function playSpin({ telegramId }) {
     if (!user) {
       const err = new Error('User not found');
       err.statusCode = 404;
-      throw err;
-    }
-
-    const intervalCheck = await checkMinInterval({
-      telegramId,
-      action: 'spin',
-      lastTimestamp: user.last_spin_at,
-    });
-    if (!intervalCheck.ok) {
-      const err = new Error(`Spinning too fast — ${intervalCheck.reason}`);
-      err.statusCode = 429;
       throw err;
     }
 
@@ -145,4 +150,4 @@ async function playSpin({ telegramId }) {
   }
 }
 
-module.exports = { playSpin, ENTRY_FEE, SEGMENTS };
+module.exports = { prepareSpin, playSpin, ENTRY_FEE, SEGMENTS };

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
 const DAILY_CAP = 20;
 const COOLDOWN_SECONDS = 60;
@@ -47,11 +48,9 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
     setError(null);
     setClaiming(true);
     try {
-      if (!window.Adsgram) throw new Error('Adsgram SDK not loaded');
-      const AdController = window.Adsgram.init({ blockId: import.meta.env?.VITE_ADSGRAM_BLOCK_ID });
-      await AdController.show();
-
-      const claimResult = await api.claimReferral();
+      const { nonce } = await api.prepareClaim();
+      await showRewardedAd(nonce);
+      const claimResult = await withConfirmationRetry(() => api.claimReferral(nonce));
       setStatus((prev) => ({ ...prev, ...claimResult }));
       onBalanceChange(claimResult.main_balance);
       setSecondsLeft(COOLDOWN_SECONDS);
