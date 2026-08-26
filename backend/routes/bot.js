@@ -76,11 +76,13 @@ router.get('/monetag-postback/:secret', async (req, res) => {
   if (!expected || !same) return res.sendStatus(404);
 
   const { ymid, reward_event_type } = req.query;
-  if (reward_event_type === 'valued' && ymid) {
-    await confirmAdEvent({ nonce: ymid });
+  console.log('Monetag postback received:', { ymid, reward_event_type, fullQuery: req.query });
+  if (reward_event_type === 'yes' && ymid) {
+    const confirmed = await confirmAdEvent({ nonce: ymid });
+    console.log('Postback confirmAdEvent result:', confirmed);
   }
-  // Always 200 — a non-'valued' event (filtered/fraud) or missing nonce
-  // isn't an error, just nothing to confirm. Monetag retries on non-200.
+  // Always 200 — a non-paid event (filtered/fraud) or missing nonce isn't
+  // an error, just nothing to confirm. Monetag retries on non-200.
   res.sendStatus(200);
 });
 
