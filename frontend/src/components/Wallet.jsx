@@ -88,7 +88,10 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
         <button type="submit" disabled={!canSubmit}>
           {submitting ? 'Submitting…' : 'Request withdrawal'}
         </button>
-        <p className="wallet-empty"><a href="https://t.me/tethermintpayout">Check Payout Channel</a></p>
+
+        <button type="submit">
+           <p className="wallet-empty"><a href="https://t.me/tethermintpayout">Check Payout Channel</a></p>
+        </button>
       </form>
 
       {successMsg && <p className="wallet-success">{successMsg}</p>}
