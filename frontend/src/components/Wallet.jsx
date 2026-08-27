@@ -5,6 +5,11 @@ const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
 const MIN_WITHDRAWAL_POINTS = 500;
 
+const linkStyle = {
+  color: 'grey',
+  textDecoration: 'none'
+}
+
 export default function Wallet({ mainBalance, onBalanceChange }) {
   const [address, setAddress] = useState('');
   const [points, setPoints] = useState('');
@@ -90,7 +95,7 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
         </button>
 
         <button type="submit">
-          <a href="https://t.me/tethermintpayout">Payout Channel</a>
+          <a href="https://t.me/tethermintpayout" style={linkStyle}>Payout Channel</a>
         </button>
 
       </form>
