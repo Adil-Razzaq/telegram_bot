@@ -5,10 +5,12 @@ const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
 const MIN_WITHDRAWAL_POINTS = 500;
 
-const linkStyle = {
-  color: 'grey',
-  textDecoration: 'none'
-}
+const linkStyle = { 
+  backgroundColor: '#1b2333', 
+  color: '#9aa1b1', 
+  textDecoration: 'none' 
+};
+
 
 export default function Wallet({ mainBalance, onBalanceChange }) {
   const [address, setAddress] = useState('');
