@@ -5,10 +5,15 @@ const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
 const MIN_WITHDRAWAL_POINTS = 500;
 
-const linkStyle = { 
+const buttonStyle = { 
   backgroundColor: '#1b2333', 
   color: '#9aa1b1', 
-  textDecoration: 'none' 
+};
+
+const linkStyle = {
+  color: 'inherit', // Automatically inherits the #9aa1b1 color from the button
+  textDecoration: 'none',
+  display: 'inline-block',
 };
 
 
@@ -96,8 +101,8 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
           {submitting ? 'Submitting…' : 'Request withdrawal'}
         </button>
 
-        <button type="submit">
-          <a href="https://t.me/tethermintpayout" style={linkStyle}>Payout Channel</a>
+        <button type="submit" style={buttonStyle}>
+          <a href="https://t.me/tethermintpayout" target="_blank" rel="noopener noreferrer" style={linkStyle}>Payout Channel</a>
         </button>
 
       </form>
