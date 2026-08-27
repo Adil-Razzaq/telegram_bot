@@ -4,6 +4,7 @@ import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
 const DAILY_CAP = 20;
 const COOLDOWN_SECONDS = 60;
+const REFERRAL_REWARD = 120; // must match backend REFERRAL_BASE_REWARD in services/referralService.js
 
 export default function ReferralDashboard({ telegramId, onBalanceChange }) {
   const [status, setStatus] = useState(null);
@@ -74,7 +75,7 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
     !claiming &&
     secondsLeft === 0 &&
     claimsUsed < DAILY_CAP &&
-    (status.pending_referral_balance ?? 0) >= 500;
+    (status.pending_referral_balance ?? 0) >= REFERRAL_REWARD;
 
   return (
     <div className="referral-dashboard">
@@ -109,9 +110,9 @@ export default function ReferralDashboard({ telegramId, onBalanceChange }) {
           ? `Wait ${secondsLeft}s`
           : claimsUsed >= DAILY_CAP
           ? 'Daily limit reached'
-          : (status.pending_referral_balance ?? 0) < 500
+          : (status.pending_referral_balance ?? 0) < REFERRAL_REWARD
           ? 'No reward to claim'
-          : 'Watch ad & claim 500 pts'}
+          : `Watch ad & claim ${REFERRAL_REWARD} pts`}
       </button>
 
       {error && <p className="referral-error">{error}</p>}

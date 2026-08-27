@@ -1,7 +1,7 @@
 const { client, rolloverUserRefCounterIfNeeded } = require('../db/db');
 const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 
-const REFERRAL_BASE_REWARD = 500;
+const REFERRAL_BASE_REWARD = 120;
 const DAILY_CLAIM_CAP = 20;
 const COOLDOWN_SECONDS = 60;
 

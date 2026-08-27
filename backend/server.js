@@ -10,9 +10,17 @@ const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
 const adminRoutes = require('./routes/admin');
 const botRoutes = require('./routes/bot');
+const userRoutes = require('./routes/user');
 
 const app = express();
+
+// You're behind nginx on the VM, which sets X-Forwarded-For. Without this,
+// express-rate-limit can't safely tell one visitor's IP from another's
+// (everyone would appear to share nginx's IP), and throws the
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR warning seen in your logs. `1` means
+// trust exactly one hop of proxy (nginx) — correct for this setup.
 app.set('trust proxy', 1);
+
 app.use(helmet());
 
 // Only your actual frontend can call this API — set FRONTEND_URL in
@@ -38,6 +46,7 @@ app.use('/api/spin', spinRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/user', userRoutes);
 app.use('/bot', botRoutes);
 
 // Central error handler. In production, unexpected (non-statusCode) errors

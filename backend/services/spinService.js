@@ -9,8 +9,8 @@ const ENTRY_FEE = 100;
 // segments 5 & 6 are locked, segments 1-4 absorb their combined 5%
 // probability proportionally rather than that probability mass vanishing.
 const SEGMENTS = [
-  { index: 1, payout: 0, weight: 0.40 },
-  { index: 2, payout: 25, weight: 0.30 },
+  { index: 1, payout: 10, weight: 0.40 },
+  { index: 2, payout: 20, weight: 0.30 },
   { index: 3, payout: 50, weight: 0.15 },
   { index: 4, payout: 100, weight: 0.10 },
   {
@@ -21,9 +21,9 @@ const SEGMENTS = [
   },
   {
     index: 6,
-    payout: 1000,
+    payout: 500,
     weight: 0.01,
-    isEligible: (pool) => pool.daily_collected >= 5000 && pool.current_pool_points >= 1000,
+    isEligible: (pool) => pool.daily_collected >= 5000 && pool.current_pool_points >= 500,
   },
 ];
 

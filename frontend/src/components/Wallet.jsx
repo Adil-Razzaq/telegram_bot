@@ -3,7 +3,7 @@ import { api } from '../api';
 
 const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
-const MIN_WITHDRAWAL_POINTS = 1000;
+const MIN_WITHDRAWAL_POINTS = 500;
 
 export default function Wallet({ mainBalance, onBalanceChange }) {
   const [address, setAddress] = useState('');

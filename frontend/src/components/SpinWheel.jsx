@@ -4,12 +4,12 @@ import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
 // Order/colors must match backend SEGMENTS in services/spinService.js
 const SEGMENTS = [
-  { index: 1, label: '0', color: '#1b2130' },
-  { index: 2, label: '25', color: '#2a3550' },
+  { index: 1, label: '10', color: '#1b2130' },
+  { index: 2, label: '20', color: '#2a3550' },
   { index: 3, label: '50', color: '#3a4a70' },
   { index: 4, label: '100', color: '#8a6a2a' },
   { index: 5, label: '200', color: '#b5822e' },
-  { index: 6, label: '1000', color: '#e8a33d' },
+  { index: 6, label: '500', color: '#e8a33d' },
 ];
 const SEGMENT_ANGLE = 360 / SEGMENTS.length;
 const SIZE = 300;

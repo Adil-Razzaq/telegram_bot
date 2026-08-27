@@ -1,9 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 const { client } = require('../db/db');
+const { sendTelegramMessage } = require('../utils/telegram');
 
 const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
-const MIN_WITHDRAWAL_POINTS = 1000; // = $0.10 — sane floor so gas/admin overhead isn't dwarfed by dust withdrawals; tune freely
+const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at 10,000 pts = $1 
 
 async function requestWithdrawal({ telegramId, address, points }) {
   if (!BEP20_ADDRESS_REGEX.test(address || '')) {
@@ -114,6 +115,18 @@ async function completeWithdrawal({ withdrawalId, txHash }) {
       args: [withdrawalId],
     });
     await tx.commit();
+
+    // Proof-of-payout for your public channel — set WITHDRAWAL_ANNOUNCE_CHANNEL
+    // in .env (e.g. @YourPublicChannel) to turn this on. No user-identifying
+    // info is included, just the points amount. A failure here never breaks
+    // the withdrawal itself — it's already been marked COMPLETED above.
+    const channel = process.env.WITHDRAWAL_ANNOUNCE_CHANNEL;
+    if (channel) {
+      sendTelegramMessage(channel, `🎉 A user just withdrew ${w.points_deducted} points!`).catch(
+        (err) => console.error('Failed to post withdrawal announcement:', err.message)
+      );
+    }
+
     return res.rows[0];
   } catch (err) {
     await tx.rollback().catch(() => {});
