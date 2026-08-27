@@ -89,7 +89,9 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
           {submitting ? 'Submitting…' : 'Request withdrawal'}
         </button>
 
-        <button style="width: 100%; height: 54px; background-color: #fcae33; color: #1e2640; font-family: sans-serif; font-size: 16px; font-weight: bold; text-align: center; border: none; border-radius: 12px; cursor: pointer; transition: background-color 0.2s;"><a href="https://t.me/tethermintpayout">Check Payout Channel</a></button>
+        <button type="submit">
+          <a href="https://t.me/tethermintpayout">Payout Channel</a>
+        </button>
 
       </form>
 
