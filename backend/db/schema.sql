@@ -100,4 +100,13 @@ CREATE TABLE IF NOT EXISTS pending_ad_events (
 );
 CREATE INDEX IF NOT EXISTS idx_pending_ad_events_telegram ON pending_ad_events(telegram_id);
 
+-- ADDED: passive "Miner" feature. accumulation_started_at marks when the
+-- current earning window began; claiming credits everything accrued
+-- since then (capped, see minerService.js) and resets it to now.
+CREATE TABLE IF NOT EXISTS miner_state (
+    telegram_id INTEGER PRIMARY KEY,
+    accumulation_started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
+);
+
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

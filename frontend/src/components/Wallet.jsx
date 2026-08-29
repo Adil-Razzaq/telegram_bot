@@ -5,18 +5,6 @@ const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
 const MIN_WITHDRAWAL_POINTS = 500;
 
-const buttonStyle = { 
-  backgroundColor: '#1b2333', 
-  color: '#9aa1b1', 
-};
-
-const linkStyle = {
-  color: 'inherit', // Automatically inherits the #9aa1b1 color from the button
-  textDecoration: 'none',
-  display: 'inline-block',
-};
-
-
 export default function Wallet({ mainBalance, onBalanceChange }) {
   const [address, setAddress] = useState('');
   const [points, setPoints] = useState('');
@@ -37,6 +25,16 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
   useEffect(() => {
     loadHistory();
   }, []);
+
+  // If anything is still PENDING, keep checking every 15s so a status
+  // change (e.g. you completing it via the admin API) shows up without
+  // needing to leave and reopen this tab.
+  useEffect(() => {
+    const hasPending = history.some((w) => w.status === 'PENDING');
+    if (!hasPending) return;
+    const interval = setInterval(loadHistory, 15000);
+    return () => clearInterval(interval);
+  }, [history]);
 
   const pointsNum = Number(points);
   const addressValid = BEP20_ADDRESS_REGEX.test(address);
@@ -100,11 +98,6 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
         <button type="submit" disabled={!canSubmit}>
           {submitting ? 'Submitting…' : 'Request withdrawal'}
         </button>
-
-        <button type="submit" style={buttonStyle}>
-          <a href="https://t.me/tethermintpayout" target="_blank" rel="noopener noreferrer" style={linkStyle}>Payout Channel</a>
-        </button>
-
       </form>
 
       {successMsg && <p className="wallet-success">{successMsg}</p>}

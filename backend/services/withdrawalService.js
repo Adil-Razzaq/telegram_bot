@@ -4,7 +4,7 @@ const { sendTelegramMessage } = require('../utils/telegram');
 
 const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
-const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at 10,000 pts = $1 
+const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at 10,000 pts = $1
 
 async function requestWithdrawal({ telegramId, address, points }) {
   if (!BEP20_ADDRESS_REGEX.test(address || '')) {

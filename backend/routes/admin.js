@@ -1,5 +1,6 @@
 const express = require('express');
 const { adminAuth } = require('../middleware/adminAuth');
+const { sendTelegramMessage } = require('../utils/telegram');
 const {
   listPendingWithdrawals,
   completeWithdrawal,
@@ -14,6 +15,24 @@ router.get('/withdrawals/pending', async (req, res) => {
     res.json({ ok: true, withdrawals: await listPendingWithdrawals() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// One-button test for WITHDRAWAL_ANNOUNCE_CHANNEL — hit this instead of
+// waiting on a real withdrawal to find out if the channel setup works.
+// Whatever's wrong (bot not an admin, wrong username, channel doesn't
+// exist) comes back directly in the response now that utils/telegram.js
+// actually checks Telegram's response instead of ignoring it.
+router.post('/test-announce', async (req, res) => {
+  const channel = process.env.WITHDRAWAL_ANNOUNCE_CHANNEL;
+  if (!channel) {
+    return res.status(400).json({ ok: false, error: 'WITHDRAWAL_ANNOUNCE_CHANNEL is not set in .env' });
+  }
+  try {
+    await sendTelegramMessage(channel, '✅ Test message — if you can see this, announcements are working.');
+    res.json({ ok: true, message: `Sent to ${channel} successfully` });
+  } catch (err) {
+    res.status(500).json({ ok: false, channel, error: err.message });
   }
 });
 
