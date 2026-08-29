@@ -1,10 +1,10 @@
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
-async function sendTelegramMessage(chatId, text) {
+async function sendTelegramMessage(chatId, text, { parseMode } = {}) {
   const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
   });
   const data = await res.json();
   // Telegram often returns a normal HTTP 200 even on failure (e.g. "bot

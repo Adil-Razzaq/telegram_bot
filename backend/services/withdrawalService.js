@@ -117,13 +117,24 @@ async function completeWithdrawal({ withdrawalId, txHash }) {
     await tx.commit();
 
     // Proof-of-payout for your public channel — set WITHDRAWAL_ANNOUNCE_CHANNEL
-    // in .env (e.g. @YourPublicChannel) to turn this on. No user-identifying
-    // info is included, just the points amount. A failure here never breaks
-    // the withdrawal itself — it's already been marked COMPLETED above.
+    // in .env (e.g. @YourPublicChannel) to turn this on. Shows the
+    // Telegram user ID (not username — not everyone has one set) rather
+    // than any other identifying info. A failure here never breaks the
+    // withdrawal itself — it's already been marked COMPLETED above.
     const channel = process.env.WITHDRAWAL_ANNOUNCE_CHANNEL;
     if (channel) {
-      sendTelegramMessage(channel, `🎉 A user just withdrew ${w.points_deducted} points!`).catch(
-        (err) => console.error('Failed to post withdrawal announcement:', err.message)
+      const bscscanUrl = `https://bscscan.com/tx/${txHash}`;
+      const message = [
+        '✅ <b>Withdrawal Completed</b>',
+        '',
+        `👤 User ID: <code>${w.telegram_id}</code>`,
+        `💰 Amount: ${w.points_deducted} points`,
+        `🔗 Tx Hash: <a href="${bscscanUrl}">View on BscScan</a>`,
+        '📌 Status: COMPLETED',
+      ].join('\n');
+
+      sendTelegramMessage(channel, message, { parseMode: 'HTML' }).catch((err) =>
+        console.error('Failed to post withdrawal announcement:', err.message)
       );
     }
 
