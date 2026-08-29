@@ -1,6 +1,7 @@
 const express = require('express');
 const { adminAuth } = require('../middleware/adminAuth');
 const { sendTelegramMessage } = require('../utils/telegram');
+const { client } = require('../db/db');
 const {
   listPendingWithdrawals,
   completeWithdrawal,
@@ -33,6 +34,61 @@ router.post('/test-announce', async (req, res) => {
     res.json({ ok: true, message: `Sent to ${channel} successfully` });
   } catch (err) {
     res.status(500).json({ ok: false, channel, error: err.message });
+  }
+});
+
+// Manually adjust a user's balance (positive to add, negative to deduct).
+// Atomic + ledger-logged with your reason attached — this is the correct
+// way to do this instead of editing the database directly, same reason
+// the withdrawal completion has to go through its own endpoint: a raw
+// edit leaves no record of why the balance changed.
+router.post('/adjust-balance', async (req, res) => {
+  const { telegram_id, points_delta, reason } = req.body;
+  const telegramId = Number(telegram_id);
+  const delta = Number(points_delta);
+
+  if (!telegramId || !Number.isInteger(delta) || delta === 0) {
+    return res.status(400).json({
+      ok: false,
+      error: 'telegram_id and a non-zero integer points_delta are required',
+    });
+  }
+
+  const tx = await client.transaction('write');
+  try {
+    const userRes = await tx.execute({
+      sql: 'SELECT main_balance FROM users WHERE telegram_id = ?',
+      args: [telegramId],
+    });
+    if (!userRes.rows[0]) {
+      const err = new Error('User not found — they need to have opened the app at least once');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (userRes.rows[0].main_balance + delta < 0) {
+      const err = new Error('This would take the balance below zero');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    await tx.execute({
+      sql: 'UPDATE users SET main_balance = main_balance + ? WHERE telegram_id = ?',
+      args: [delta, telegramId],
+    });
+    await tx.execute({
+      sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
+      args: [telegramId, 'admin_adjustment', delta, JSON.stringify({ reason: reason || null })],
+    });
+
+    const updatedRes = await tx.execute({
+      sql: 'SELECT main_balance FROM users WHERE telegram_id = ?',
+      args: [telegramId],
+    });
+    await tx.commit();
+    res.json({ ok: true, telegram_id: telegramId, new_balance: updatedRes.rows[0].main_balance });
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
 });
 
