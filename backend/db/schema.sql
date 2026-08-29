@@ -90,11 +90,21 @@ CREATE TABLE IF NOT EXISTS task_completions (
 -- (status='confirmed') can that nonce be spent on a spin or referral
 -- claim — this is what makes the reward server-verified instead of a
 -- client-side promise the frontend could fake by just calling the API.
+-- ADDED: 'bonus_ad' is a standalone, fully optional rewarded-ad placement
+-- (see services/bonusAdService.js) — distinct from 'spin' and
+-- 'referral_claim'. Spin no longer requires an ad at all (see
+-- services/spinService.js); this is the only ad-gated *reward*, and its
+-- payout is a real 50/50 split of Monetag's own reported ad revenue
+-- (estimated_price) rather than a flat number disconnected from what the
+-- ad actually earned. This is what keeps the reward from ever drifting to
+-- a multiple of real ad value, which is what Monetag's own policy flags
+-- as "unrealistic and excessively high" rewards.
 CREATE TABLE IF NOT EXISTS pending_ad_events (
     nonce TEXT PRIMARY KEY,
     telegram_id INTEGER NOT NULL,
-    action TEXT NOT NULL, -- 'spin' | 'referral_claim'
+    action TEXT NOT NULL, -- 'referral_claim' | 'bonus_ad'
     status TEXT CHECK(status IN ('pending', 'confirmed', 'consumed')) DEFAULT 'pending',
+    estimated_price REAL DEFAULT 0, -- Monetag's {estimated_price} macro, real USD revenue for this event
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     confirmed_at DATETIME
 );

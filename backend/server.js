@@ -12,6 +12,7 @@ const adminRoutes = require('./routes/admin');
 const botRoutes = require('./routes/bot');
 const userRoutes = require('./routes/user');
 const minerRoutes = require('./routes/miner');
+const bonusAdRoutes = require('./routes/bonusAd');
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/miner', minerRoutes);
+app.use('/api/bonus-ad', bonusAdRoutes);
 app.use('/bot', botRoutes);
 
 // Central error handler. In production, unexpected (non-statusCode) errors

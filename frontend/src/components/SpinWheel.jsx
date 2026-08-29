@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
-import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
 // Order/colors must match backend SEGMENTS in services/spinService.js
 const SEGMENTS = [
@@ -28,12 +27,10 @@ function wedgePath(startAngle, endAngle) {
   return `M ${CENTER},${CENTER} L ${start.x},${start.y} A ${RADIUS},${RADIUS} 0 0,1 ${end.x},${end.y} Z`;
 }
 
-/**
- * Gates the spin on: getting a nonce from the backend, showing the
- * Monetag ad with that nonce as ymid, then spending the nonce — which
- * only succeeds once Monetag's postback has confirmed it server-side
- * (see backend/utils/monetagAds.js).
- */
+// No ad involved — spinning costs only the entry fee (see ENTRY_FEE in
+// backend/services/spinService.js). Ad-supported earning lives
+// separately, as an entirely optional "watch ad for bonus points"
+// feature in the Wallet tab (see BonusAd.jsx).
 
 export default function SpinWheel({ mainBalance, onBalanceChange }) {
   const [spinning, setSpinning] = useState(false);
@@ -60,9 +57,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
     setError(null);
     setSpinning(true);
     try {
-      const { nonce } = await api.prepareSpin();
-      await showRewardedAd(nonce);
-      const result = await withConfirmationRetry(() => api.playSpin(nonce));
+      const result = await api.playSpin();
 
       const targetSegment = SEGMENTS.find((s) => s.index === result.segment_index);
       const targetIndex = SEGMENTS.indexOf(targetSegment);
@@ -117,7 +112,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       </div>
 
       <button className="spin-button" onClick={handleSpin} disabled={spinning || !canAfford}>
-        {spinning ? 'Spinning…' : canAfford ? 'Watch ad & Spin (100 pts)' : 'Not enough points'}
+        {spinning ? 'Spinning…' : canAfford ? 'Spin (100 pts)' : 'Not enough points'}
       </button>
 
       {lastResult && !spinning && (

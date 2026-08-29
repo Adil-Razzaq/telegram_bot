@@ -30,11 +30,12 @@ export const api = {
   getMe: () => apiCall('/user/me'),
   minerStatus: () => apiCall('/miner/status'),
   minerClaim: () => apiCall('/miner/claim', { method: 'POST' }),
-  prepareSpin: () => apiCall('/spin/prepare', { method: 'POST' }),
-  playSpin: (nonce) => apiCall('/spin/play', { method: 'POST', body: { nonce } }),
+  playSpin: () => apiCall('/spin/play', { method: 'POST' }), // no ad required
   referralStatus: () => apiCall('/referral/status'),
   prepareClaim: () => apiCall('/referral/prepare-claim', { method: 'POST' }),
   claimReferral: (nonce) => apiCall('/referral/claim', { method: 'POST', body: { nonce } }),
+  prepareBonusAd: () => apiCall('/bonus-ad/prepare', { method: 'POST' }),
+  claimBonusAd: (nonce) => apiCall('/bonus-ad/claim', { method: 'POST', body: { nonce } }),
   requestWithdrawal: (address, points) =>
     apiCall('/withdrawal/request', { method: 'POST', body: { address, points } }),
   withdrawalHistory: () => apiCall('/withdrawal/history'),

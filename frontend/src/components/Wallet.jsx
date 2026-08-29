@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import BonusAd from './BonusAd';
 
 const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
@@ -67,6 +68,8 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
       <p className="wallet-balance">
         Balance: <strong>{mainBalance}</strong> pts (${(mainBalance / POINTS_PER_USD).toFixed(2)})
       </p>
+
+      <BonusAd onBalanceChange={onBalanceChange} />
 
       <form onSubmit={handleSubmit} className="wallet-form">
         <label>

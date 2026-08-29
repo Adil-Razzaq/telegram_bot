@@ -27,6 +27,7 @@ const COLUMNS_TO_ENSURE = [
   { table: 'users', column: 'username', ddl: 'TEXT' },
   { table: 'users', column: 'last_spin_at', ddl: 'DATETIME' },
   { table: 'users', column: 'referred_by', ddl: 'INTEGER' },
+  { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
 ];
 
 async function ensureColumn(table, column, ddl) {
