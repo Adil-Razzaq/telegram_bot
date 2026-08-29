@@ -69,10 +69,17 @@ async function telegramAuth(req, res, next) {
 
     req.telegramUser = userObj;
 
-    // Ensure the user row exists (first-touch signup)
+    // Create the user row if this is their first-ever request, and keep
+    // username in sync on every request after that too — Telegram sends
+    // it fresh in initData every time. The previous version only ever
+    // did INSERT OR IGNORE, which never touches username at all, so
+    // anyone who opened the Mini App without ever sending /start to the
+    // bot (very common — most people use the menu button directly) had
+    // a permanently NULL username in the database.
     await client.execute({
-      sql: 'INSERT OR IGNORE INTO users (telegram_id) VALUES (?)',
-      args: [userObj.id],
+      sql: `INSERT INTO users (telegram_id, username) VALUES (?, ?)
+            ON CONFLICT(telegram_id) DO UPDATE SET username = excluded.username`,
+      args: [userObj.id, userObj.username || null],
     });
 
     next();
