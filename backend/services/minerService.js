@@ -4,7 +4,7 @@ const BASE_DAILY_POINTS = 200; // = $0.02/day at 10,000 pts = $1
 const BASE_RATE_PER_SECOND = BASE_DAILY_POINTS / 86400;
 const MAX_ACCUMULATION_SECONDS = 86400; // caps backlog at 24h so idle time isn't unlimited
 
-// Confirmed tier structure: every 10 referrals unlocks the next tier.
+// Tier structure: every 10 referrals unlocks the next tier.
 // First five tiers give 20/20/10/10/10 (cumulative +70% at 50 referrals),
 // then every additional 10 referrals adds +5% forever, uncapped.
 const TIER_MILESTONES_PERCENT = [20, 20, 10, 10, 10];

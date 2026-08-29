@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Miner from './components/Miner';
 import SpinWheel from './components/SpinWheel';
 import ReferralDashboard from './components/ReferralDashboard';
 import Wallet from './components/Wallet';
@@ -6,7 +7,7 @@ import { api } from './api';
 import './styles/app.css';
 
 export default function App() {
-  const [tab, setTab] = useState('spin');
+  const [tab, setTab] = useState('miner');
   const [mainBalance, setMainBalance] = useState(0);
   const [balanceLoaded, setBalanceLoaded] = useState(false);
   const [telegramId, setTelegramId] = useState(null);
@@ -22,10 +23,6 @@ export default function App() {
       setDisplayName(user.username ? `@${user.username}` : user.first_name || 'Player');
     }
 
-    // This was the bug: balance always started at 0 and only ever got
-    // updated after some action (spin/claim/withdrawal) happened to
-    // return a fresh number — reopening the app, or just refreshing,
-    // showed 0 until you did something. Fetch the real value up front.
     api
       .getMe()
       .then((me) => setMainBalance(me.main_balance ?? 0))
@@ -46,6 +43,9 @@ export default function App() {
       </header>
 
       <main className="app-main">
+        {tab === 'miner' && (
+          <Miner mainBalance={mainBalance} onBalanceChange={setMainBalance} />
+        )}
         {tab === 'spin' && (
           <SpinWheel mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
@@ -58,6 +58,9 @@ export default function App() {
       </main>
 
       <nav className="app-tabs">
+        <button className={tab === 'miner' ? 'active' : ''} onClick={() => setTab('miner')}>
+          Miner
+        </button>
         <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
           Spin
         </button>

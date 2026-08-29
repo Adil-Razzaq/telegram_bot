@@ -128,7 +128,7 @@ async function completeWithdrawal({ withdrawalId, txHash }) {
         '✅ <b>Withdrawal Completed</b>',
         '',
         `👤 User ID: <code>${w.telegram_id}</code>`,
-        `💰 Amount: ${w.points_deducted} points`,
+        `💰 Amount: ${w.points_deducted} points ($${w.amount_usd.toFixed(2)})`,
         `🔗 Tx Hash: <a href="${bscscanUrl}">View on BscScan</a>`,
         '📌 Status: COMPLETED',
       ].join('\n');

@@ -28,6 +28,8 @@ async function apiCall(path, { method = 'GET', body } = {}) {
 
 export const api = {
   getMe: () => apiCall('/user/me'),
+  minerStatus: () => apiCall('/miner/status'),
+  minerClaim: () => apiCall('/miner/claim', { method: 'POST' }),
   prepareSpin: () => apiCall('/spin/prepare', { method: 'POST' }),
   playSpin: (nonce) => apiCall('/spin/play', { method: 'POST', body: { nonce } }),
   referralStatus: () => apiCall('/referral/status'),
