@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Panel</title>
+<style>
+  :root {
+    --bg: #0b0e14; --surface: #141822; --surface-2: #1b2130; --border: #262e40;
+    --text: #edeff3; --muted: #8a93a8; --accent: #e8a33d; --success: #34d399; --danger: #f0594f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 20px; max-width: 720px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h2 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 28px 0 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  input, select {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-size: 14px; margin-bottom: 8px;
+  }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  button {
+    background: var(--accent); color: #16130a; border: none; border-radius: 8px;
+    padding: 10px 16px; font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  button:disabled { background: var(--surface-2); color: var(--muted); cursor: default; }
+  button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: var(--danger); color: #fff; }
+  .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .status-msg { font-size: 13px; margin-top: 8px; }
+  .status-msg.ok { color: var(--success); }
+  .status-msg.err { color: var(--danger); }
+  .withdrawal-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
+  .withdrawal-item:last-child { border-bottom: none; }
+  .withdrawal-meta { font-family: monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+  #keyGate { text-align: center; margin-top: 60px; }
+  #app { display: none; }
+</style>
+</head>
+<body>
+
+<div id="keyGate">
+  <h1>Admin Panel</h1>
+  <p class="muted">Enter your admin key to continue. It's stored only in this browser (localStorage) — never sent anywhere except your own API.</p>
+  <input id="keyInput" type="password" placeholder="Admin API key" />
+  <button onclick="saveKey()">Continue</button>
+</div>
+
+<div id="app">
+  <h1>Admin Panel</h1>
+  <button class="secondary" onclick="clearKey()" style="float:right">Change key</button>
+
+  <h2>Pending Withdrawals</h2>
+  <div id="withdrawalsList" class="card">Loading…</div>
+
+  <h2>Adjust a User's Balance</h2>
+  <div class="card">
+    <label>Telegram ID</label>
+    <input id="adjTelegramId" type="number" placeholder="123456789" />
+    <label>Points (negative to deduct)</label>
+    <input id="adjPoints" type="number" placeholder="500 or -500" />
+    <label>Reason</label>
+    <input id="adjReason" type="text" placeholder="compensation for bug" />
+    <button onclick="adjustBalance()">Apply</button>
+    <div id="adjStatus" class="status-msg"></div>
+  </div>
+
+  <h2>Add a Task</h2>
+  <div class="card">
+    <label>Title</label>
+    <input id="taskTitle" type="text" placeholder="Follow X (Twitter)" />
+    <div class="row">
+      <div>
+        <label>Reward points</label>
+        <input id="taskReward" type="number" placeholder="5" />
+      </div>
+      <div>
+        <label>Icon (emoji)</label>
+        <input id="taskIcon" type="text" placeholder="🐦" />
+      </div>
+    </div>
+    <label>Link URL</label>
+    <input id="taskLink" type="text" placeholder="https://x.com/youraccount" />
+    <label>Task type</label>
+    <select id="taskType" onchange="toggleChannelField()">
+      <option value="generic">Generic (honor system)</option>
+      <option value="telegram_join">Telegram channel join (verified)</option>
+    </select>
+    <div id="channelIdField" style="display:none">
+      <label>Telegram channel (e.g. @yourchannel)</label>
+      <input id="taskChannel" type="text" placeholder="@yourchannel" />
+    </div>
+    <button onclick="addTask()">Add Task</button>
+    <div id="taskStatus" class="status-msg"></div>
+  </div>
+
+  <h2>Announcement Channel</h2>
+  <div class="card">
+    <p class="muted">Tests whether WITHDRAWAL_ANNOUNCE_CHANNEL is configured correctly.</p>
+    <button class="secondary" onclick="testAnnounce()">Send Test Message</button>
+    <div id="announceStatus" class="status-msg"></div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = window.location.origin + '/api';
+
+  function getKey() { return localStorage.getItem('adminKey'); }
+  function saveKey() {
+    const key = document.getElementById('keyInput').value.trim();
+    if (!key) return;
+    localStorage.setItem('adminKey', key);
+    init();
+  }
+  function clearKey() {
+    localStorage.removeItem('adminKey');
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('keyGate').style.display = 'block';
+  }
+
+  async function adminFetch(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': getKey(), ...(options.headers || {}) },
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  function toggleChannelField() {
+    const isJoin = document.getElementById('taskType').value === 'telegram_join';
+    document.getElementById('channelIdField').style.display = isJoin ? 'block' : 'none';
+  }
+
+  async function loadWithdrawals() {
+    const listEl = document.getElementById('withdrawalsList');
+    try {
+      const { withdrawals } = await adminFetch('/admin/withdrawals/pending');
+      if (withdrawals.length === 0) {
+        listEl.innerHTML = '<p class="muted">No pending withdrawals.</p>';
+        return;
+      }
+      listEl.innerHTML = withdrawals.map((w) => `
+        <div class="withdrawal-item" id="w-${w.id}">
+          <div><strong>${w.points_deducted} pts</strong> ($${w.amount_usd.toFixed(2)}) — user ${w.telegram_id}</div>
+          <div class="withdrawal-meta">${w.usdt_bep20_address}</div>
+          <div class="muted">${new Date(w.created_at).toLocaleString()}</div>
+          <div class="row" style="margin-top:8px">
+            <input id="hash-${w.id}" type="text" placeholder="Transaction hash after you send USDT" />
+          </div>
+          <div class="row">
+            <button onclick="completeWithdrawal('${w.id}')">Mark Complete</button>
+            <button class="danger" onclick="rejectWithdrawal('${w.id}')">Reject &amp; Refund</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      listEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
+  async function completeWithdrawal(id) {
+    const hash = document.getElementById('hash-' + id).value.trim();
+    if (!hash) { alert('Enter the transaction hash first — you should only complete this after actually sending the USDT.'); return; }
+    try {
+      await adminFetch('/admin/withdrawal/complete', { method: 'POST', body: JSON.stringify({ withdrawal_id: id, tx_hash: hash }) });
+      await loadWithdrawals();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function rejectWithdrawal(id) {
+    if (!confirm('Reject this withdrawal? The points will be refunded to the user.')) return;
+    try {
+      await adminFetch('/admin/withdrawal/reject', { method: 'POST', body: JSON.stringify({ withdrawal_id: id }) });
+      await loadWithdrawals();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function adjustBalance() {
+    const statusEl = document.getElementById('adjStatus');
+    statusEl.textContent = '';
+    try {
+      const telegram_id = document.getElementById('adjTelegramId').value;
+      const points_delta = document.getElementById('adjPoints').value;
+      const reason = document.getElementById('adjReason').value;
+      const result = await adminFetch('/admin/adjust-balance', {
+        method: 'POST', body: JSON.stringify({ telegram_id, points_delta, reason }),
+      });
+      statusEl.textContent = `Done — new balance: ${result.new_balance} pts`;
+      statusEl.className = 'status-msg ok';
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
+  }
+
+  async function addTask() {
+    const statusEl = document.getElementById('taskStatus');
+    statusEl.textContent = '';
+    try {
+      const body = {
+        title: document.getElementById('taskTitle').value,
+        reward_points: document.getElementById('taskReward').value,
+        link_url: document.getElementById('taskLink').value,
+        icon: document.getElementById('taskIcon').value || '⭐',
+        task_type: document.getElementById('taskType').value,
+        telegram_channel_id: document.getElementById('taskChannel').value || undefined,
+      };
+      const result = await adminFetch('/admin/tasks', { method: 'POST', body: JSON.stringify(body) });
+      statusEl.textContent = `Task added (id: ${result.task_id})`;
+      statusEl.className = 'status-msg ok';
+      ['taskTitle','taskReward','taskLink','taskIcon','taskChannel'].forEach(id => document.getElementById(id).value = '');
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
+  }
+
+  async function testAnnounce() {
+    const statusEl = document.getElementById('announceStatus');
+    statusEl.textContent = 'Sending…';
+    statusEl.className = 'status-msg';
+    try {
+      const result = await adminFetch('/admin/test-announce', { method: 'POST' });
+      statusEl.textContent = result.message;
+      statusEl.className = 'status-msg ok';
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
+  }
+
+  function init() {
+    document.getElementById('keyGate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadWithdrawals();
+  }
+
+  if (getKey()) init();
+</script>
+</body>
+</html>

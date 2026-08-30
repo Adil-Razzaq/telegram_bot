@@ -11,7 +11,7 @@ function shortAddress(addr) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-export default function Wallet({ mainBalance, onBalanceChange }) {
+export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
   const [connectedWallet, setConnectedWallet] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const [walletError, setWalletError] = useState(null);
@@ -109,7 +109,16 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
 
   return (
     <div className="wallet">
-      <h2>Wallet</h2>
+      <h2>Profile</h2>
+      {telegramId && (
+        <div className="friends-card">
+          <span className="friends-card-icon">👤</span>
+          <div className="friends-card-info">
+            <span className="friends-card-label">User ID</span>
+            <span className="friends-card-value profile-user-id">{telegramId}</span>
+          </div>
+        </div>
+      )}
       <p className="wallet-balance">
         Balance: <strong>{mainBalance}</strong> pts (${(mainBalance / POINTS_PER_USD).toFixed(2)})
       </p>

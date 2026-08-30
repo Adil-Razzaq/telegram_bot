@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Miner from './components/Miner';
 import Tasks from './components/Tasks';
 import SpinWheel from './components/SpinWheel';
-import ReferralDashboard from './components/ReferralDashboard';
+import Friends from './components/Friends';
 import Wallet from './components/Wallet';
 import { api } from './api';
 import './styles/app.css';
@@ -51,17 +51,17 @@ export default function App() {
         {tab === 'spin' && (
           <SpinWheel mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
-        {tab === 'referral' && (
-          <ReferralDashboard telegramId={telegramId} onBalanceChange={setMainBalance} />
+        {tab === 'friends' && (
+          <Friends telegramId={telegramId} onBalanceChange={setMainBalance} />
         )}
-        {tab === 'wallet' && (
-          <Wallet mainBalance={mainBalance} onBalanceChange={setMainBalance} />
+        {tab === 'profile' && (
+          <Wallet telegramId={telegramId} mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
       </main>
 
       <nav className="app-tabs">
         <button className={tab === 'miner' ? 'active' : ''} onClick={() => setTab('miner')}>
-          Miner
+          Mine
         </button>
         <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>
           Tasks
@@ -69,11 +69,11 @@ export default function App() {
         <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
           Spin
         </button>
-        <button className={tab === 'referral' ? 'active' : ''} onClick={() => setTab('referral')}>
-          Referrals
+        <button className={tab === 'friends' ? 'active' : ''} onClick={() => setTab('friends')}>
+          Friends
         </button>
-        <button className={tab === 'wallet' ? 'active' : ''} onClick={() => setTab('wallet')}>
-          Wallet
+        <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}>
+          Profile
         </button>
       </nav>
     </div>

@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -44,6 +45,19 @@ app.use(
 );
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+app.get('/admin', (req, res) => {
+  // helmet's default CSP (applied globally above) blocks inline
+  // <script>/<style> tags, which is exactly what this simple
+  // single-file admin page uses. Overriding it just for this one
+  // response rather than weakening CSP everywhere else. The actual
+  // protection here is still adminAuth on every API call the page
+  // makes — this page itself contains no secrets or sensitive data.
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  );
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 app.use('/api/spin', spinRoutes);
 app.use('/api/referral', referralRoutes);
