@@ -27,7 +27,7 @@ const COLUMNS_TO_ENSURE = [
   { table: 'users', column: 'username', ddl: 'TEXT' },
   { table: 'users', column: 'last_spin_at', ddl: 'DATETIME' },
   { table: 'users', column: 'referred_by', ddl: 'INTEGER' },
-  { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
+  { table: 'users', column: 'wallet_address', ddl: 'TEXT' },
 ];
 
 async function ensureColumn(table, column, ddl) {
@@ -49,6 +49,15 @@ async function migrate() {
   for (const { table, column, ddl } of COLUMNS_TO_ENSURE) {
     await ensureColumn(table, column, ddl);
   }
+
+  // This index depends on wallet_address, which the loop above may have
+  // JUST added on an existing database — so it has to run after that
+  // loop, never bundled into the schema.sql batch above (which runs
+  // before any column-healing and would fail with "no such column" on a
+  // database that predates this feature).
+  await client.execute(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address) WHERE wallet_address IS NOT NULL'
+  );
 }
 
 async function rolloverDailyCountersIfNeeded() {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Miner from './components/Miner';
+import Tasks from './components/Tasks';
 import SpinWheel from './components/SpinWheel';
 import ReferralDashboard from './components/ReferralDashboard';
 import Wallet from './components/Wallet';
@@ -46,6 +47,7 @@ export default function App() {
         {tab === 'miner' && (
           <Miner mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
+        {tab === 'tasks' && <Tasks onBalanceChange={setMainBalance} />}
         {tab === 'spin' && (
           <SpinWheel mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
@@ -60,6 +62,9 @@ export default function App() {
       <nav className="app-tabs">
         <button className={tab === 'miner' ? 'active' : ''} onClick={() => setTab('miner')}>
           Miner
+        </button>
+        <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>
+          Tasks
         </button>
         <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
           Spin

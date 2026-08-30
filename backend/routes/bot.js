@@ -75,14 +75,10 @@ router.get('/monetag-postback/:secret', async (req, res) => {
     crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
   if (!expected || !same) return res.sendStatus(404);
 
-  const { ymid, reward_event_type, estimated_price } = req.query;
-  console.log('Monetag postback received:', { ymid, reward_event_type, estimated_price, fullQuery: req.query });
-  // Monetag's dashboard sends this macro as the string "yes"/"no" (their
-  // docs elsewhere say "valued"/"not_valued" — accepting both is
-  // defensive against that inconsistency rather than trusting one source).
-  const isPaidEvent = reward_event_type === 'yes' || reward_event_type === 'valued';
-  if (isPaidEvent && ymid) {
-    const confirmed = await confirmAdEvent({ nonce: ymid, estimatedPrice: estimated_price });
+  const { ymid, reward_event_type } = req.query;
+  console.log('Monetag postback received:', { ymid, reward_event_type, fullQuery: req.query });
+  if (reward_event_type === 'valued' && ymid) {
+    const confirmed = await confirmAdEvent({ nonce: ymid });
     console.log('Postback confirmAdEvent result:', confirmed);
   }
   // Always 200 — a non-paid event (filtered/fraud) or missing nonce isn't

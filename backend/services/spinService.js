@@ -1,12 +1,6 @@
 const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
+const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 
-// Spin no longer requires watching an ad. Monetag/Adsgram policy
-// explicitly prohibits gating a core app action behind a mandatory ad
-// ("services where you need to watch advertisements to perform any
-// actions") — this used to call consumeAdEvent() before every spin,
-// which is exactly that pattern. The entry fee alone (funded into
-// spin_pool, see playSpin below) is what makes spins self-funding now;
-// ad revenue is earned separately and optionally via bonusAdService.js.
 const ENTRY_FEE = 100;
 
 // Base probabilities. These only apply among segments that are currently
@@ -54,12 +48,27 @@ function pickSegment(pool) {
 }
 
 /**
- * Plays one spin for telegramId. No ad required — just the entry fee.
- * Throws Error with .statusCode for the route layer to translate into an
- * HTTP response.
+ * Plays one spin for telegramId. Throws Error with .statusCode for the
+ * route layer to translate into an HTTP response.
  */
-async function playSpin({ telegramId }) {
+async function prepareSpin({ telegramId }) {
+  return startAdEvent({ telegramId, action: 'spin' });
+}
+
+/**
+ * Plays one spin for telegramId. `nonce` must be a Monetag-confirmed ad
+ * event from prepareSpin() — consumeAdEvent throws if it's missing,
+ * unconfirmed, expired, or already used. Throws Error with .statusCode
+ * for the route layer to translate into an HTTP response.
+ */
+async function playSpin({ telegramId, nonce }) {
   await rolloverDailyCountersIfNeeded();
+
+  // Consumed before the balance transaction: if the spin later fails
+  // (e.g. insufficient balance), the ad view is "spent" either way —
+  // that's an acceptable tradeoff for keeping this atomic and simple,
+  // and it's not exploitable (a wasted ad view costs the user, not us).
+  await consumeAdEvent({ nonce, telegramId, action: 'spin' });
 
   const tx = await client.transaction('write');
   try {
@@ -141,4 +150,4 @@ async function playSpin({ telegramId }) {
   }
 }
 
-module.exports = { playSpin, ENTRY_FEE, SEGMENTS };
+module.exports = { prepareSpin, playSpin, ENTRY_FEE, SEGMENTS };

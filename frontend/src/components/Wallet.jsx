@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import BonusAd from './BonusAd';
+import { connectWalletConnect, disconnectWalletConnectSession } from '../walletConnect';
 
 const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const POINTS_PER_USD = 10000;
 const MIN_WITHDRAWAL_POINTS = 500;
 
+function shortAddress(addr) {
+  if (!addr) return '';
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 export default function Wallet({ mainBalance, onBalanceChange }) {
+  const [connectedWallet, setConnectedWallet] = useState(null);
+  const [connecting, setConnecting] = useState(false);
+  const [walletError, setWalletError] = useState(null);
+
   const [address, setAddress] = useState('');
   const [points, setPoints] = useState('');
   const [history, setHistory] = useState([]);
@@ -23,19 +32,55 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
     }
   }
 
+  async function loadWalletStatus() {
+    try {
+      const me = await api.getMe();
+      if (me.wallet_address) {
+        setConnectedWallet(me.wallet_address);
+        setAddress(me.wallet_address);
+      }
+    } catch (e) {
+      // non-fatal — the rest of the wallet page still works without this
+    }
+  }
+
   useEffect(() => {
     loadHistory();
+    loadWalletStatus();
   }, []);
 
-  // If anything is still PENDING, keep checking every 15s so a status
-  // change (e.g. you completing it via the admin API) shows up without
-  // needing to leave and reopen this tab.
   useEffect(() => {
     const hasPending = history.some((w) => w.status === 'PENDING');
     if (!hasPending) return;
     const interval = setInterval(loadHistory, 15000);
     return () => clearInterval(interval);
   }, [history]);
+
+  async function handleConnect() {
+    setConnecting(true);
+    setWalletError(null);
+    try {
+      const walletAddress = await connectWalletConnect();
+      const result = await api.connectWallet(walletAddress);
+      setConnectedWallet(result.wallet_address);
+      setAddress(result.wallet_address);
+    } catch (e) {
+      setWalletError(e.message);
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setWalletError(null);
+    try {
+      await api.disconnectWallet();
+      await disconnectWalletConnectSession();
+      setConnectedWallet(null);
+    } catch (e) {
+      setWalletError(e.message);
+    }
+  }
 
   const pointsNum = Number(points);
   const addressValid = BEP20_ADDRESS_REGEX.test(address);
@@ -69,7 +114,26 @@ export default function Wallet({ mainBalance, onBalanceChange }) {
         Balance: <strong>{mainBalance}</strong> pts (${(mainBalance / POINTS_PER_USD).toFixed(2)})
       </p>
 
-      <BonusAd onBalanceChange={onBalanceChange} />
+      <div className="wallet-connect-row">
+        {connectedWallet ? (
+          <>
+            <span className="wallet-connected-chip">🔗 {shortAddress(connectedWallet)}</span>
+            <button type="button" className="wallet-disconnect-button" onClick={handleDisconnect}>
+              Disconnect
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="wallet-connect-button"
+            onClick={handleConnect}
+            disabled={connecting}
+          >
+            {connecting ? 'Connecting…' : '🔗 Connect Wallet'}
+          </button>
+        )}
+      </div>
+      {walletError && <p className="wallet-error">{walletError}</p>}
 
       <form onSubmit={handleSubmit} className="wallet-form">
         <label>

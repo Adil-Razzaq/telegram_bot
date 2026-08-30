@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/me', telegramAuth, async (req, res) => {
   try {
     const result = await client.execute({
-      sql: 'SELECT telegram_id, username, main_balance FROM users WHERE telegram_id = ?',
+      sql: 'SELECT telegram_id, username, main_balance, wallet_address FROM users WHERE telegram_id = ?',
       args: [req.telegramUser.id],
     });
     res.json({ ok: true, ...result.rows[0] });

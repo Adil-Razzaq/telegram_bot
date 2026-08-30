@@ -233,47 +233,6 @@ h3 {
   font-size: 13px;
 }
 
-.bonus-ad {
-  background: var(--surface-2);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 18px;
-}
-
-.bonus-ad h3 {
-  font-family: var(--font-display);
-  font-size: 15px;
-  margin: 0 0 6px;
-}
-
-.bonus-ad-copy {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 0 0 12px;
-}
-
-.bonus-ad-button {
-  background: var(--accent);
-  color: #16130a;
-  border: none;
-  padding: 12px 18px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  width: 100%;
-  transition: transform 0.1s ease, opacity 0.15s ease;
-}
-
-.bonus-ad-button:active:not(:disabled) { transform: scale(0.98); }
-
-.bonus-ad-button:disabled {
-  background: var(--surface);
-  color: var(--muted);
-}
-
-.bonus-ad-success { color: var(--success); font-size: 13px; margin-top: 8px; }
-.bonus-ad-error { color: var(--danger); font-size: 13px; margin-top: 8px; }
-
 /* ---------- Referral dashboard ---------- */
 .referral-dashboard { padding-top: 8px; }
 
@@ -574,4 +533,126 @@ h3 {
 .miner-error {
   color: var(--danger);
   font-size: 13px;
+}
+
+/* ---------- Tasks ---------- */
+.tasks-container { padding-top: 8px; }
+
+.tasks-subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+.tasks-empty { color: var(--muted); font-size: 13px; }
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.task-icon {
+  font-size: 22px;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+
+.task-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.task-reward {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.task-button {
+  background: var(--accent);
+  color: #16130a;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.task-button-claim {
+  background: var(--success);
+}
+
+.task-button-done {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.tasks-error { color: var(--danger); font-size: 13px; }
+
+/* ---------- Wallet connect ---------- */
+.wallet-connect-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.wallet-connect-button {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wallet-connect-button:disabled {
+  color: var(--muted);
+}
+
+.wallet-connected-chip {
+  background: var(--success-soft);
+  color: var(--success);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.wallet-disconnect-button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 12.5px;
 }

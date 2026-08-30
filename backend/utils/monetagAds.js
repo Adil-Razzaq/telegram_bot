@@ -13,16 +13,11 @@ const { client } = require('../db/db');
  * 2. The frontend shows the Monetag ad, passing that nonce as `ymid`.
  * 3. Monetag's servers — independently of anything the frontend says —
  *    GET your postback URL (registered once in the Monetag dashboard,
- *    see routes/bot.js) with that same ymid plus `reward_event_type`
- *    (which is 'valued' only if the ad was genuinely watched and
- *    monetized) and `estimated_price` — Monetag's own real-time-bid
- *    revenue estimate for that exact event, in USD. confirmAdEvent
- *    (below) marks the row confirmed and stores that price.
+ *    see routes/bot.js) with that same ymid plus `reward_event_type`,
+ *    which is 'valued' only if the ad was genuinely watched and
+ *    monetized. confirmAdEvent (below) marks the row confirmed.
  * 4. Only a confirmed nonce can be spent (consumeAdEvent) by the actual
- *    claim endpoint — and it can only be spent once. consumeAdEvent
- *    returns the full event row (including estimated_price) so the
- *    caller can size a reward off the ad's real value instead of a flat
- *    number — see services/bonusAdService.js.
+ *    spin/claim endpoint — and it can only be spent once.
  *
  * The postback URL itself has no signature from Monetag, so the secret
  * path segment in routes/bot.js (same pattern as the Telegram webhook)
@@ -41,19 +36,11 @@ async function startAdEvent({ telegramId, action }) {
   return nonce;
 }
 
-async function confirmAdEvent({ nonce, estimatedPrice }) {
-  // Coerce defensively — Monetag sends this as a query-string value, and
-  // a missing/malformed macro should fall back to 0 rather than crash or
-  // store NaN (which would silently zero out every downstream reward
-  // calculation that multiplies against it).
-  const price = Number(estimatedPrice);
-  const safePrice = Number.isFinite(price) && price > 0 ? price : 0;
-
+async function confirmAdEvent({ nonce }) {
   const res = await client.execute({
-    sql: `UPDATE pending_ad_events
-          SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP, estimated_price = ?
+    sql: `UPDATE pending_ad_events SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP
           WHERE nonce = ? AND status = 'pending'`,
-    args: [safePrice, nonce],
+    args: [nonce],
   });
   return res.rowsAffected > 0;
 }
@@ -102,8 +89,6 @@ async function consumeAdEvent({ nonce, telegramId, action }) {
     err.statusCode = 409;
     throw err;
   }
-
-  return event; // includes estimated_price, for callers that reward off real ad value
 }
 
 module.exports = { startAdEvent, confirmAdEvent, consumeAdEvent };

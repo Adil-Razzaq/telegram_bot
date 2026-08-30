@@ -2,6 +2,7 @@ const express = require('express');
 const { adminAuth } = require('../middleware/adminAuth');
 const { sendTelegramMessage } = require('../utils/telegram');
 const { client } = require('../db/db');
+const { createTask, listAllTasksAdmin, setTaskActive } = require('../services/taskService');
 const {
   listPendingWithdrawals,
   completeWithdrawal,
@@ -112,6 +113,49 @@ router.post('/withdrawal/reject', async (req, res) => {
     res.json({ ok: true, withdrawal });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Add a new task — this is the "one command" way to add tasks without
+// touching code. task_type defaults to 'generic' (honor-system, no real
+// verification available) — pass "telegram_join" + telegram_channel_id
+// for a Join-Channel task, which IS verified for real against Telegram's
+// API when the user claims it.
+router.post('/tasks', async (req, res) => {
+  const { title, reward_points, link_url, task_type, telegram_channel_id, icon, sort_order } = req.body;
+  if (!title || !reward_points || !link_url) {
+    return res.status(400).json({ ok: false, error: 'title, reward_points, and link_url are required' });
+  }
+  try {
+    const result = await createTask({
+      title,
+      rewardPoints: Number(reward_points),
+      linkUrl: link_url,
+      taskType: task_type,
+      telegramChannelId: telegram_channel_id,
+      icon,
+      sortOrder: sort_order,
+    });
+    res.json({ ok: true, task_id: result.id });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/tasks', async (req, res) => {
+  try {
+    res.json({ ok: true, tasks: await listAllTasksAdmin() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/tasks/:id/deactivate', async (req, res) => {
+  try {
+    await setTaskActive({ taskId: Number(req.params.id), active: false });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
