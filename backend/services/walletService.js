@@ -1,6 +1,8 @@
 const { client } = require('../db/db');
 
-const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
+// TON addresses (Tonkeeper / TON Connect), not BEP-20 — see the same
+// regex and reasoning in withdrawalService.js.
+const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
 
 /**
  * Connects a wallet address to this Telegram account. First account to
@@ -17,8 +19,8 @@ const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
  * with no gap for a race to slip through.
  */
 async function connectWallet({ telegramId, address }) {
-  if (!BEP20_ADDRESS_REGEX.test(address || '')) {
-    const err = new Error('Invalid BEP-20 address format');
+  if (!TON_ADDRESS_REGEX.test(address || '')) {
+    const err = new Error('Invalid TON wallet address format');
     err.statusCode = 400;
     throw err;
   }
@@ -34,10 +36,14 @@ async function connectWallet({ telegramId, address }) {
     throw err;
   }
 
-  const normalizedAddress = address.toLowerCase();
+  // Unlike BEP-20/hex addresses, TON's base64url addresses ARE
+  // case-sensitive — no .toLowerCase() normalization here, or two
+  // genuinely different addresses that happen to differ only in case
+  // would incorrectly collide.
+  const normalizedAddress = address;
 
   // Reconnecting the same wallet they already own — fine, no-op.
-  if (current.wallet_address && current.wallet_address.toLowerCase() === normalizedAddress) {
+  if (current.wallet_address && current.wallet_address === normalizedAddress) {
     return { wallet_address: current.wallet_address, already_connected: true };
   }
 
@@ -80,4 +86,4 @@ async function disconnectWallet({ telegramId }) {
   });
 }
 
-module.exports = { connectWallet, disconnectWallet, BEP20_ADDRESS_REGEX };
+module.exports = { connectWallet, disconnectWallet, TON_ADDRESS_REGEX };

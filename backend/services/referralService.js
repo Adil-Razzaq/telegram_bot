@@ -1,7 +1,9 @@
 const { client, rolloverUserRefCounterIfNeeded } = require('../db/db');
 const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { getSetting } = require('../utils/settings');
 
-const REFERRAL_BASE_REWARD = 120;
+// Default 100 pts/claim (utils/settings.js) — tunable live via the admin
+// panel's Settings section without a deploy.
 const DAILY_CLAIM_CAP = 20;
 const COOLDOWN_SECONDS = 60;
 
@@ -12,6 +14,7 @@ const COOLDOWN_SECONDS = 60;
 // Idempotent via users.referred_by: a user can only ever be credited to
 // one referrer, once, no matter how many times /start fires for them.
 async function grantReferral({ referrerId, referredTelegramId }) {
+  const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
   if (referrerId === referredTelegramId) {
     const err = new Error('Self-referral is not allowed');
     err.statusCode = 400;
@@ -69,6 +72,7 @@ async function prepareClaim({ telegramId }) {
 }
 
 async function claimReferral({ telegramId, nonce }) {
+  const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
   await rolloverUserRefCounterIfNeeded(telegramId);
   await consumeAdEvent({ nonce, telegramId, action: 'referral_claim' });
 
@@ -129,4 +133,4 @@ async function claimReferral({ telegramId, nonce }) {
   }
 }
 
-module.exports = { grantReferral, prepareClaim, claimReferral, REFERRAL_BASE_REWARD, DAILY_CLAIM_CAP, COOLDOWN_SECONDS };
+module.exports = { grantReferral, prepareClaim, claimReferral, DAILY_CLAIM_CAP, COOLDOWN_SECONDS };

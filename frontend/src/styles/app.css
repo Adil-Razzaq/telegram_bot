@@ -1,12 +1,12 @@
 :root {
-  --bg: #0b0e14;
-  --surface: #141822;
-  --surface-2: #1b2130;
-  --border: #262e40;
-  --text: #edeff3;
-  --muted: #8a93a8;
-  --accent: #e8a33d;      /* coin / reward gold — the one accent color */
-  --accent-soft: #3a2f1c;
+  --bg: #051424;
+  --surface: rgba(18, 33, 49, 0.62);
+  --surface-2: rgba(27, 47, 68, 0.62);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #d4e4fa;
+  --muted: #8a9bb0;
+  --accent: #00e38b;      /* matches the coin/brand green from the provided art */
+  --accent-soft: #123326;
   --success: #34d399;
   --success-soft: #163329;
   --danger: #f0594f;
@@ -25,7 +25,16 @@
 
 html, body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100%;
+  background-color: var(--bg);
+  /* Provided background art, applied app-wide. Fixed attachment + a dark
+     overlay (below, on .app) is what keeps foreground text readable over
+     it regardless of scroll position or which panel is on top of it. */
+  background-image: url('/bg.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   color: var(--text);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
@@ -47,6 +56,19 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Glass-panel treatment (blurred, semi-transparent surfaces over the
+   background art) applied broadly across every card/pill/bar in the
+   app, rather than hand-listing every class — anything using the
+   translucent --surface/--surface-2 tokens gets the blur automatically,
+   which is what actually makes the transparency read as "frosted glass"
+   instead of just "dim". */
+.task-card, .friends-card, .miner-stat-pill, .balance-pill, .app-tabs,
+.wallet-form, .referral-stats > div, .wallet-connect-button,
+.wallet-connected-chip, .withdrawal-item, .task-button {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
 }
@@ -57,6 +79,24 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   min-height: 100vh;
   max-width: 480px;
   margin: 0 auto;
+  position: relative;
+}
+
+/* Dark scrim over the background art so every panel/card (which use
+   semi-transparent surfaces below) stays readable regardless of what
+   part of the image is behind them. */
+.app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 16, 0.55);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* ---------- Header ---------- */
@@ -469,8 +509,8 @@ h3 {
 
 .miner-coin-wrap {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: 220px;
+  height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -481,8 +521,28 @@ h3 {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(232, 163, 61, 0.35), transparent 70%);
-  filter: blur(6px);
+  background: radial-gradient(circle, rgba(0, 227, 139, 0.35), transparent 70%);
+  filter: blur(10px);
+}
+
+.miner-coin-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 227, 139, 0.25);
+}
+.miner-coin-ring.r1 { inset: 0; animation: minerPing 3s ease-out infinite; }
+.miner-coin-ring.r2 { inset: 14px; border-color: rgba(0, 227, 139, 0.35); }
+.miner-coin-ring.r3 { inset: 28px; border-color: rgba(0, 227, 139, 0.45); box-shadow: 0 0 40px rgba(0, 227, 139, 0.25); }
+
+@keyframes minerPing {
+  0% { transform: scale(1); opacity: 0.6; }
+  75%, 100% { transform: scale(1.25); opacity: 0; }
+}
+
+@keyframes minerFloat {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(1.5deg); }
+  100% { transform: translateY(0) rotate(0deg); }
 }
 
 .miner-coin {
@@ -490,20 +550,16 @@ h3 {
   width: 168px;
   height: 168px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #f0b955, #b5772a);
-  border: 4px solid #7a521c;
-  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.15), 0 10px 30px rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(0, 227, 139, 0.4), inset 0 0 0 2px rgba(0, 227, 139, 0.3);
+  animation: minerFloat 6s ease-in-out infinite;
 }
 
-.miner-coin span {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 26px;
-  color: #16130a;
-  letter-spacing: 0.02em;
+.miner-coin img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .miner-tier-progress {
@@ -533,6 +589,61 @@ h3 {
 .miner-error {
   color: var(--danger);
   font-size: 13px;
+}
+
+.miner-copy {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+/* Claim toast — appears ONLY after a successful claim, per the mockup;
+   nowhere else in the app shows this pattern. */
+.miner-toast {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 50;
+  max-width: 448px;
+  margin: 0 auto;
+  background: rgba(18, 33, 49, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 227, 139, 0.3);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 0 20px rgba(0, 227, 139, 0.15);
+  animation: minerToastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1), minerToastOut 0.4s ease 3.6s forwards;
+}
+
+.miner-toast-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(0, 227, 139, 0.18);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.miner-toast-title { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+.miner-toast-body { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+@keyframes minerToastIn {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes minerToastOut {
+  to { transform: translateY(-20px); opacity: 0; }
 }
 
 /* ---------- Tasks (emerald/glass design — scoped to this tab only,

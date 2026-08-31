@@ -91,6 +91,7 @@
     <select id="taskType" onchange="toggleChannelField()">
       <option value="generic">Generic (honor system)</option>
       <option value="telegram_join">Telegram channel join (verified)</option>
+      <option value="watch_ad">Watch ad (Rewarded Popup)</option>
     </select>
     <div id="channelIdField" style="display:none">
       <label>Telegram channel (e.g. @yourchannel)</label>
@@ -105,6 +106,21 @@
     <p class="muted">Tests whether WITHDRAWAL_ANNOUNCE_CHANNEL is configured correctly.</p>
     <button class="secondary" onclick="testAnnounce()">Send Test Message</button>
     <div id="announceStatus" class="status-msg"></div>
+  </div>
+
+  <h2>Settings</h2>
+  <div class="card">
+    <p class="muted">Every admin-tunable number in the app. Changes take effect within ~15 seconds, no deploy needed.</p>
+    <div id="settingsFields">Loading…</div>
+    <button onclick="saveSettings()" style="margin-top:8px">Save Settings</button>
+    <div id="settingsStatus" class="status-msg"></div>
+  </div>
+
+  <h2>Ad Revenue</h2>
+  <div class="card">
+    <p class="muted">Real numbers from Monetag's own postbacks — independent of app reward logic.</p>
+    <div id="adRevenueSummary">Loading…</div>
+    <button class="secondary" onclick="loadAdRevenue()" style="margin-top:8px">Refresh</button>
   </div>
 </div>
 
@@ -237,10 +253,68 @@
     }
   }
 
+  const SETTINGS_LABELS = {
+    points_per_usd: 'Points per $1',
+    referral_reward: 'Referral reward (points/claim)',
+    miner_daily_points: 'Miner: total points/day',
+    miner_cycles_per_day: 'Miner: cycles/day',
+    miner_cycle_hours: 'Miner: hours/cycle',
+  };
+
+  async function loadSettings() {
+    const el = document.getElementById('settingsFields');
+    try {
+      const { settings, known_keys } = await adminFetch('/admin/settings');
+      el.innerHTML = known_keys.map((key) => `
+        <label>${SETTINGS_LABELS[key] || key}</label>
+        <input id="setting-${key}" type="number" value="${settings[key]}" />
+      `).join('');
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
+  async function saveSettings() {
+    const statusEl = document.getElementById('settingsStatus');
+    statusEl.textContent = '';
+    try {
+      const body = {};
+      Object.keys(SETTINGS_LABELS).forEach((key) => {
+        const input = document.getElementById('setting-' + key);
+        if (input) body[key] = Number(input.value);
+      });
+      await adminFetch('/admin/settings', { method: 'POST', body: JSON.stringify(body) });
+      statusEl.textContent = 'Saved — applies within ~15 seconds.';
+      statusEl.className = 'status-msg ok';
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
+  }
+
+  async function loadAdRevenue() {
+    const el = document.getElementById('adRevenueSummary');
+    el.textContent = 'Loading…';
+    try {
+      const { summary } = await adminFetch('/admin/ad-revenue');
+      el.innerHTML = `
+        <div>Total postbacks: <strong>${summary.total_postbacks || 0}</strong></div>
+        <div>Paid postbacks: <strong>${summary.paid_postbacks || 0}</strong></div>
+        <div>Total revenue: <strong>$${(summary.total_revenue_usd || 0).toFixed(4)}</strong></div>
+        <div>Avg price (paid only): <strong>$${(summary.avg_paid_price || 0).toFixed(5)}</strong></div>
+        <div>Effective CPM: <strong>$${(summary.effective_cpm || 0).toFixed(3)}</strong></div>
+      `;
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
   function init() {
     document.getElementById('keyGate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
+    loadSettings();
+    loadAdRevenue();
   }
 
   if (getKey()) init();

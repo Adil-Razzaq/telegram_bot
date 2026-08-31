@@ -19,9 +19,12 @@ CREATE TABLE IF NOT EXISTS users (
     -- This is what makes referral crediting reliable and idempotent.
     referred_by INTEGER,
     -- ADDED: locks to whichever Telegram account first connects this
-    -- wallet — see the unique index below and walletService.js. This is
-    -- deliberately NOT a way to merge balances across accounts; it's
-    -- purely identity/ownership, to close the multi-account exploit path.
+    -- TON wallet (via TON Connect / Tonkeeper) — see the unique index
+    -- below and walletService.js. This is deliberately NOT a way to
+    -- merge balances across accounts; it's purely identity/ownership,
+    -- to close the multi-account exploit path, and it also doubles as
+    -- "login with the same wallet" — reconnecting the same Tonkeeper
+    -- account always resolves back to this same telegram_id.
     wallet_address TEXT,
     -- ADDED: lets us lazily reset daily_ref_claims_count once per calendar day
     daily_ref_reset_date TEXT DEFAULT (date('now')),
@@ -76,8 +79,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     reward_points INTEGER NOT NULL,
-    link_url TEXT NOT NULL,
-    task_type TEXT CHECK(task_type IN ('telegram_join', 'generic')) DEFAULT 'generic',
+    link_url TEXT NOT NULL DEFAULT '', -- unused for task_type='watch_ad'
+    task_type TEXT CHECK(task_type IN ('telegram_join', 'generic', 'watch_ad')) DEFAULT 'generic',
     telegram_channel_id TEXT, -- required for task_type = 'telegram_join', e.g. @YourChannel
     icon TEXT DEFAULT '⭐',
     active INTEGER DEFAULT 1,
@@ -106,40 +109,72 @@ CREATE TABLE IF NOT EXISTS ad_reward_pings (
     received_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ADDED: tracks completed Task-format ads (Adsgram's native ad unit — e.g.
--- "join this channel"). Each row is one user completing one task, ever —
--- the UNIQUE constraint is what stops a task from being claimed twice.
-CREATE TABLE IF NOT EXISTS task_completions (
-    telegram_id INTEGER NOT NULL,
-    task_id TEXT NOT NULL,
-    completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (telegram_id, task_id)
-);
-
 -- ADDED: tracks a rewarded-ad flow from start to confirmation. A row is
 -- created (status='pending') right before the frontend shows a Monetag
 -- ad, carrying a random nonce as the `ymid` Monetag echoes back in its
 -- postback. Only once Monetag's own server confirms the ad was watched
--- (status='confirmed') can that nonce be spent on a spin or referral
--- claim — this is what makes the reward server-verified instead of a
--- client-side promise the frontend could fake by just calling the API.
+-- (status='confirmed') can that nonce be spent — this is what makes the
+-- reward server-verified instead of a client-side promise the frontend
+-- could fake by just calling the API. `action` covers every ad-gated
+-- flow: 'spin' | 'referral_claim' | 'miner_start' | 'ad_task:<id>'.
 CREATE TABLE IF NOT EXISTS pending_ad_events (
     nonce TEXT PRIMARY KEY,
     telegram_id INTEGER NOT NULL,
-    action TEXT NOT NULL, -- 'spin' | 'referral_claim'
+    action TEXT NOT NULL,
     status TEXT CHECK(status IN ('pending', 'confirmed', 'consumed')) DEFAULT 'pending',
+    estimated_price REAL DEFAULT 0, -- Monetag's real reported revenue for this exact ad view (USD)
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     confirmed_at DATETIME
 );
 CREATE INDEX IF NOT EXISTS idx_pending_ad_events_telegram ON pending_ad_events(telegram_id);
 
--- ADDED: passive "Miner" feature. accumulation_started_at marks when the
--- current earning window began; claiming credits everything accrued
--- since then (capped, see minerService.js) and resets it to now.
+-- ADDED: a raw, append-only log of EVERY Monetag postback received,
+-- whether or not it matched a pending_ad_events row, whether or not it
+-- was a paid ("yes"/"valued") event. This is what lets you answer "how
+-- much did this specific click actually earn" directly from the
+-- database — pending_ad_events only tells you about events THIS app
+-- triggered and is waiting to confirm; this table is the full raw
+-- record of what Monetag's server told you, matching their macro names
+-- 1:1, for real analytics/auditing independent of the reward logic.
+CREATE TABLE IF NOT EXISTS ad_postback_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ymid TEXT,
+    telegram_id_macro TEXT, -- the {telegram_id} macro Monetag sends, kept separate from our own verified telegram_id
+    zone_id TEXT,
+    sub_zone_id TEXT,
+    event_type TEXT, -- 'impression' | 'click'
+    reward_event_type TEXT, -- 'yes'/'no' per Monetag's dashboard, though 'valued'/'not_valued' also seen in their docs — both accepted, see routes/bot.js
+    estimated_price REAL DEFAULT 0,
+    request_var TEXT,
+    matched_pending_event INTEGER DEFAULT 0, -- 1 if this ymid matched a real pending_ad_events row
+    received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ad_postback_log_ymid ON ad_postback_log(ymid);
+
+-- ADDED: cycle-based Miner. Redesigned from a passive always-accruing
+-- model to: user taps Start (after watching an ad) -> miner runs for
+-- exactly settings.miner_cycle_hours -> stops on its own and must be
+-- manually restarted -> capped at settings.miner_cycles_per_day starts
+-- per calendar day. status/cycle_started_at/cycle_ends_at track the
+-- CURRENT cycle only; cycles_completed_today + cycles_reset_date are
+-- what let the daily cap reset itself at midnight without a cron job.
 CREATE TABLE IF NOT EXISTS miner_state (
     telegram_id INTEGER PRIMARY KEY,
-    accumulation_started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status TEXT CHECK(status IN ('idle', 'running')) DEFAULT 'idle',
+    cycle_started_at DATETIME,
+    cycle_ends_at DATETIME,
+    cycles_completed_today INTEGER DEFAULT 0,
+    cycles_reset_date TEXT DEFAULT (date('now')),
     FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
+);
+
+-- ADDED: every admin-tunable number in the app lives here instead of
+-- being hardcoded — one place to change points_per_usd, referral_reward,
+-- miner timing, etc. via the admin panel, with no deploy needed.
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

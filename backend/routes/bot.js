@@ -62,11 +62,28 @@ router.post('/webhook/:secret', async (req, res) => {
 });
 
 // Monetag calls this after independently confirming an ad event — set
-// this exact URL (with your own secret) as the Postback URL for each ad
-// zone in the Monetag dashboard: one URL per format is fine, they all
-// hit the same handler. The :secret segment is what stops someone from
-// hitting this endpoint directly and faking a reward — see monetagAds.js
-// for why that matters (Monetag's postback itself carries no signature).
+// this exact URL (with your own secret AND every macro below) as the
+// Postback URL in the Monetag dashboard for BNBXpert_bot:
+//
+//   https://YOUR_DOMAIN/bot/monetag-postback/YOUR_SECRET
+//     ?ymid={ymid}
+//     &telegram_id={telegram_id}
+//     &zone_id={zone_id}
+//     &sub_zone_id={sub_zone_id}
+//     &event_type={event_type}
+//     &reward_event_type={reward_event_type}
+//     &estimated_price={estimated_price}
+//     &request_var={request_var}
+//
+// The :secret path segment is what stops someone from hitting this
+// directly and faking a reward — see monetagAds.js for why that matters
+// (Monetag's postback itself carries no signature).
+//
+// EVERY postback that lands here — matched or not, paid or not — gets
+// logged as a raw row in ad_postback_log first. That's what lets you
+// answer "how much did this specific click actually earn" straight from
+// the database (see the SELECT example in DEPLOYMENT.md), independent
+// of whether it happened to match something this app was waiting on.
 router.get('/monetag-postback/:secret', async (req, res) => {
   const expected = process.env.MONETAG_POSTBACK_SECRET || '';
   const provided = req.params.secret || '';
@@ -75,12 +92,52 @@ router.get('/monetag-postback/:secret', async (req, res) => {
     crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
   if (!expected || !same) return res.sendStatus(404);
 
-  const { ymid, reward_event_type } = req.query;
-  console.log('Monetag postback received:', { ymid, reward_event_type, fullQuery: req.query });
-  if (reward_event_type === 'valued' && ymid) {
-    const confirmed = await confirmAdEvent({ nonce: ymid });
-    console.log('Postback confirmAdEvent result:', confirmed);
+  const {
+    ymid,
+    telegram_id: telegramIdMacro,
+    zone_id: zoneId,
+    sub_zone_id: subZoneId,
+    event_type: eventType,
+    reward_event_type: rewardEventType,
+    estimated_price: estimatedPrice,
+    request_var: requestVar,
+  } = req.query;
+
+  console.log('Monetag postback received:', req.query);
+
+  // Monetag's dashboard shows this macro as "yes"/"no"; their docs
+  // elsewhere say "valued"/"not_valued" — accepting both rather than
+  // trusting one source, since we've seen both in the wild.
+  const isPaidEvent = rewardEventType === 'yes' || rewardEventType === 'valued';
+
+  let matched = false;
+  if (isPaidEvent && ymid) {
+    matched = await confirmAdEvent({ nonce: ymid, estimatedPrice });
+    console.log('Postback confirmAdEvent result:', matched);
   }
+
+  // Raw audit log — always written, regardless of match/paid status.
+  try {
+    await client.execute({
+      sql: `INSERT INTO ad_postback_log
+            (ymid, telegram_id_macro, zone_id, sub_zone_id, event_type, reward_event_type, estimated_price, request_var, matched_pending_event)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        ymid || null,
+        telegramIdMacro || null,
+        zoneId || null,
+        subZoneId || null,
+        eventType || null,
+        rewardEventType || null,
+        Number(estimatedPrice) || 0,
+        requestVar || null,
+        matched ? 1 : 0,
+      ],
+    });
+  } catch (err) {
+    console.error('Failed to write ad_postback_log:', err);
+  }
+
   // Always 200 — a non-paid event (filtered/fraud) or missing nonce isn't
   // an error, just nothing to confirm. Monetag retries on non-200.
   res.sendStatus(200);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
 // Existing tasks store emoji icons (e.g. "🐦"); the new design uses
 // Material Symbols ligature names (e.g. "chat_bubble"). This renders
@@ -51,6 +52,27 @@ export default function Tasks({ onBalanceChange }) {
     }
   }
 
+  // watch_ad tasks: Rewarded Popup, high CPM — one click both opens the
+  // advertiser's page AND is the claim action, no separate Go/Claim
+  // step. showRewardedAd must be called directly inside this click
+  // handler (no earlier await) since the Popup format needs a real
+  // browser user-gesture to open its new tab.
+  async function handleWatchAdTask(task) {
+    setClaimingId(task.id);
+    setError(null);
+    try {
+      const { nonce } = await api.prepareAdTask(task.id);
+      await showRewardedAd(nonce);
+      const result = await withConfirmationRetry(() => api.claimAdTask(task.id, nonce));
+      onBalanceChange(result.main_balance);
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setClaimingId(null);
+    }
+  }
+
   if (!tasks) {
     return (
       <div className="tasks-page">
@@ -85,6 +107,14 @@ export default function Tasks({ onBalanceChange }) {
             {task.completed ? (
               <button className="task-button task-button-done" disabled>
                 Done
+              </button>
+            ) : task.task_type === 'watch_ad' ? (
+              <button
+                className="task-button task-button-claim"
+                onClick={() => handleWatchAdTask(task)}
+                disabled={claimingId === task.id}
+              >
+                {claimingId === task.id ? '…' : 'Watch ad'}
               </button>
             ) : visited[task.id] ? (
               <button

@@ -1,6 +1,7 @@
 const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
 const { client } = require('../db/db');
+const { getAllSettings } = require('../utils/settings');
 
 const router = express.Router();
 
@@ -14,6 +15,17 @@ router.get('/me', telegramAuth, async (req, res) => {
       args: [req.telegramUser.id],
     });
     res.json({ ok: true, ...result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Lets the frontend render correct $ amounts and copy (points_per_usd,
+// referral_reward, miner_daily_points, etc.) WITHOUT hardcoding numbers
+// that can drift the moment an admin changes them via the admin panel.
+router.get('/config', telegramAuth, async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await getAllSettings()) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

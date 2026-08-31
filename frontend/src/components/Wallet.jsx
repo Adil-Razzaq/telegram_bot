@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { connectWalletConnect, disconnectWalletConnectSession } from '../walletConnect';
+import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from '../tonConnect';
 
-const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
-const POINTS_PER_USD = 10000;
+const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
 const MIN_WITHDRAWAL_POINTS = 500;
 
 function shortAddress(addr) {
@@ -15,6 +14,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
   const [connectedWallet, setConnectedWallet] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const [walletError, setWalletError] = useState(null);
+  const [config, setConfig] = useState(null);
 
   const [address, setAddress] = useState('');
   const [points, setPoints] = useState('');
@@ -44,9 +44,35 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     }
   }
 
+  // "Login with the same Tonkeeper" in practice: TON Connect restores a
+  // previous session automatically on load. If it restores an address,
+  // AND this account has no wallet linked yet, we link it here — this is
+  // what makes a returning user with the same Tonkeeper resolve straight
+  // back to this account, no manual re-connect needed. If a DIFFERENT
+  // wallet auto-restores than what's linked, we deliberately don't
+  // silently switch anything — connectWallet's own conflict handling
+  // covers that safely (see walletService.js).
+  async function tryAutoConnect() {
+    try {
+      const restoredAddress = await initTonConnectAutoConnect();
+      if (!restoredAddress) return;
+      const me = await api.getMe();
+      if (!me.wallet_address) {
+        const result = await api.connectWallet(restoredAddress);
+        setConnectedWallet(result.wallet_address);
+        setAddress(result.wallet_address);
+      }
+    } catch (e) {
+      // Auto-connect failing silently is correct here — the user can
+      // still tap Connect manually, this just skips the convenience path.
+    }
+  }
+
   useEffect(() => {
     loadHistory();
     loadWalletStatus();
+    tryAutoConnect();
+    api.getConfig().then(setConfig).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -60,7 +86,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     setConnecting(true);
     setWalletError(null);
     try {
-      const walletAddress = await connectWalletConnect();
+      const walletAddress = await connectTonWallet();
       const result = await api.connectWallet(walletAddress);
       setConnectedWallet(result.wallet_address);
       setAddress(result.wallet_address);
@@ -75,15 +101,16 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     setWalletError(null);
     try {
       await api.disconnectWallet();
-      await disconnectWalletConnectSession();
+      await disconnectTonWallet();
       setConnectedWallet(null);
     } catch (e) {
       setWalletError(e.message);
     }
   }
 
+  const pointsPerUsd = config?.points_per_usd || 10000;
   const pointsNum = Number(points);
-  const addressValid = BEP20_ADDRESS_REGEX.test(address);
+  const addressValid = TON_ADDRESS_REGEX.test(address);
   const amountValid =
     Number.isInteger(pointsNum) && pointsNum >= MIN_WITHDRAWAL_POINTS && pointsNum <= mainBalance;
   const canSubmit = addressValid && amountValid && !submitting;
@@ -120,7 +147,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         </div>
       )}
       <p className="wallet-balance">
-        Balance: <strong>{mainBalance}</strong> ADLX (${(mainBalance / POINTS_PER_USD).toFixed(2)})
+        Balance: <strong>{mainBalance}</strong> ADLX (${(mainBalance / pointsPerUsd).toFixed(2)})
       </p>
 
       <div className="wallet-connect-row">
@@ -138,7 +165,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
             onClick={handleConnect}
             disabled={connecting}
           >
-            {connecting ? 'Connecting…' : '🔗 Connect Wallet'}
+            {connecting ? 'Connecting…' : '🔗 Connect Tonkeeper'}
           </button>
         )}
       </div>
@@ -146,13 +173,13 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
 
       <form onSubmit={handleSubmit} className="wallet-form">
         <label>
-          BEP-20 (BSC) USDT address
+          TON wallet address
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value.trim())}
-            placeholder="0x..."
+            placeholder="EQ... or UQ..."
           />
-          {address && !addressValid && <span className="field-error">Invalid BEP-20 address</span>}
+          {address && !addressValid && <span className="field-error">Invalid TON address</span>}
         </label>
 
         <label>
@@ -194,11 +221,11 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
                 {new Date(w.created_at).toLocaleString()}
                 {w.tx_hash && (
                   <a
-                    href={`https://bscscan.com/tx/${w.tx_hash}`}
+                    href={`https://tonviewer.com/transaction/${w.tx_hash}`}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    View on BscScan
+                    View on Tonviewer
                   </a>
                 )}
               </div>

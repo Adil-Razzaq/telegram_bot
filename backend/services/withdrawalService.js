@@ -1,14 +1,18 @@
 const { v4: uuidv4 } = require('uuid');
 const { client } = require('../db/db');
 const { sendTelegramMessage } = require('../utils/telegram');
+const { getSetting } = require('../utils/settings');
 
-const BEP20_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
-const POINTS_PER_USD = 10000;
-const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at 10,000 pts = $1
+// TON addresses, not BEP-20 — matches the TON Connect / Tonkeeper wallet
+// integration (see walletService.js). Accepts both the common
+// user-friendly form (48 base64url chars, starting EQ/UQ/kQ/0Q) and the
+// raw form (workchain:hex), since different wallets/tools surface either.
+const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
+const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at the default 10,000 pts = $1 rate
 
 async function requestWithdrawal({ telegramId, address, points }) {
-  if (!BEP20_ADDRESS_REGEX.test(address || '')) {
-    const err = new Error('Invalid BEP-20 address format');
+  if (!TON_ADDRESS_REGEX.test(address || '')) {
+    const err = new Error('Invalid TON wallet address format');
     err.statusCode = 400;
     throw err;
   }
@@ -42,7 +46,8 @@ async function requestWithdrawal({ telegramId, address, points }) {
     });
 
     const id = uuidv4();
-    const amountUsd = points / POINTS_PER_USD;
+    const pointsPerUsd = await getSetting('points_per_usd');
+    const amountUsd = points / pointsPerUsd;
     await tx.execute({
       sql: `INSERT INTO withdrawals (id, telegram_id, usdt_bep20_address, amount_usd, points_deducted, status)
             VALUES (?, ?, ?, ?, ?, 'PENDING')`,
@@ -123,13 +128,13 @@ async function completeWithdrawal({ withdrawalId, txHash }) {
     // withdrawal itself — it's already been marked COMPLETED above.
     const channel = process.env.WITHDRAWAL_ANNOUNCE_CHANNEL;
     if (channel) {
-      const bscscanUrl = `https://bscscan.com/tx/${txHash}`;
+      const tonviewerUrl = `https://tonviewer.com/transaction/${txHash}`;
       const message = [
         '✅ <b>Withdrawal Completed</b>',
         '',
         `👤 User ID: <code>${w.telegram_id}</code>`,
         `💰 Amount: ${w.points_deducted} points ($${w.amount_usd.toFixed(2)})`,
-        `🔗 Tx Hash: <a href="${bscscanUrl}">View on BscScan</a>`,
+        `🔗 Tx Hash: <a href="${tonviewerUrl}">View on Tonviewer</a>`,
         '📌 Status: COMPLETED',
       ].join('\n');
 
@@ -200,7 +205,6 @@ module.exports = {
   listWithdrawalsForUser,
   completeWithdrawal,
   rejectWithdrawal,
-  BEP20_ADDRESS_REGEX,
-  POINTS_PER_USD,
+  TON_ADDRESS_REGEX,
   MIN_WITHDRAWAL_POINTS,
 };

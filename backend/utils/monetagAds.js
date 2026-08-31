@@ -13,11 +13,17 @@ const { client } = require('../db/db');
  * 2. The frontend shows the Monetag ad, passing that nonce as `ymid`.
  * 3. Monetag's servers — independently of anything the frontend says —
  *    GET your postback URL (registered once in the Monetag dashboard,
- *    see routes/bot.js) with that same ymid plus `reward_event_type`,
- *    which is 'valued' only if the ad was genuinely watched and
- *    monetized. confirmAdEvent (below) marks the row confirmed.
+ *    see routes/bot.js) with that same ymid plus `reward_event_type`
+ *    (their dashboard shows this as "yes"/"no"; their docs elsewhere
+ *    say "valued"/"not_valued" — both are accepted defensively) and
+ *    `estimated_price`, Monetag's own real revenue estimate for that
+ *    exact ad view. confirmAdEvent (below) marks the row confirmed and
+ *    stores that price — see ad_postback_log in schema.sql for the full
+ *    raw record of every postback, independent of this table.
  * 4. Only a confirmed nonce can be spent (consumeAdEvent) by the actual
- *    spin/claim endpoint — and it can only be spent once.
+ *    spin/claim endpoint — and it can only be spent once. It returns the
+ *    full event row (including estimated_price) so a caller like
+ *    bonusAdService can size a reward off the ad's real value.
  *
  * The postback URL itself has no signature from Monetag, so the secret
  * path segment in routes/bot.js (same pattern as the Telegram webhook)
@@ -36,11 +42,14 @@ async function startAdEvent({ telegramId, action }) {
   return nonce;
 }
 
-async function confirmAdEvent({ nonce }) {
+async function confirmAdEvent({ nonce, estimatedPrice }) {
+  const price = Number(estimatedPrice);
+  const safePrice = Number.isFinite(price) && price > 0 ? price : 0;
   const res = await client.execute({
-    sql: `UPDATE pending_ad_events SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP
+    sql: `UPDATE pending_ad_events
+          SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP, estimated_price = ?
           WHERE nonce = ? AND status = 'pending'`,
-    args: [nonce],
+    args: [safePrice, nonce],
   });
   return res.rowsAffected > 0;
 }
@@ -83,12 +92,12 @@ async function consumeAdEvent({ nonce, telegramId, action }) {
     args: [nonce],
   });
   if (updateRes.rowsAffected === 0) {
-    // Lost a race — someone/something already consumed it between our
-    // SELECT and this UPDATE.
     const err = new Error('This ad verification token was already used');
     err.statusCode = 409;
     throw err;
   }
+
+  return event;
 }
 
 module.exports = { startAdEvent, confirmAdEvent, consumeAdEvent };

@@ -99,9 +99,11 @@ App's URL if you set one up via `/newapp`.
 1. Sign up at monetag.com, go to the **Telegram Mini Apps** tab, and add
    your app (they'll ask for its name and your Mini App's URL — your
    Vercel URL).
-2. Create an ad zone for **Rewarded Interstitial** (this is what the spin
-   button and referral claim button use). Monetag's dashboard gives you
-   an exact script tag like:
+2. Create an ad zone for **Rewarded Popup** — every ad placement in this
+   app (spin, referral claim, miner start, watch_ad tasks) uses this
+   format, not Rewarded Interstitial, since Popup's click-through model
+   commands a meaningfully higher CPM. Monetag's dashboard gives you an
+   exact script tag like:
    ```html
    <script src="https://something.example/sdk.js" data-zone="123456" data-sdk="show_123456"></script>
    ```
@@ -111,9 +113,11 @@ App's URL if you set one up via `/newapp`.
    just the number from `data-zone` above (e.g. `123456`) — this is how
    `frontend/src/monetag.js` finds the right `show_...` function.
 4. Still in the Monetag dashboard, find **Postback URL** for that zone
-   and set it to:
+   and set it to (all on one line, with every macro — the app logs the
+   full raw postback to `ad_postback_log` for real per-click revenue
+   auditing, not just the ones it happens to gate a reward on):
    ```
-   https://your-backend-url/bot/monetag-postback/YOUR_MONETAG_POSTBACK_SECRET
+   https://your-backend-url/bot/monetag-postback/YOUR_MONETAG_POSTBACK_SECRET?ymid={ymid}&telegram_id={telegram_id}&zone_id={zone_id}&sub_zone_id={sub_zone_id}&event_type={event_type}&reward_event_type={reward_event_type}&estimated_price={estimated_price}&request_var={request_var}
    ```
    using your actual backend URL and the `MONETAG_POSTBACK_SECRET` value
    from your `.env` (same one you invented for `BOT_WEBHOOK_SECRET` — make
@@ -121,24 +125,68 @@ App's URL if you set one up via `/newapp`.
 5. Redeploy the frontend (Vercel) after adding the env var, and restart
    the backend (`pm2 restart ... --update-env` if using pm2) so it picks
    up `MONETAG_POSTBACK_SECRET`.
-6. Test: tap the spin button, watch the ad through, and the spin should
-   resolve within a few seconds — that delay is the app waiting for
-   Monetag's postback to confirm the ad before it'll let you spend it.
+6. Test: tap any ad-gated button (e.g. the miner's Start button), watch
+   the ad through, and the action should resolve within a few seconds —
+   that delay is the app waiting for Monetag's postback to confirm the
+   ad before it'll let you spend it. To check what a specific click
+   actually earned, query `ad_postback_log` directly (see "Checking real
+   ad earnings" below), or use the Ad Revenue panel in `/admin`.
+
+### Checking real ad earnings per click
+
+Every postback Monetag sends — matched to a reward or not, paid or not —
+is logged raw in `ad_postback_log`. From the VM:
+```
+node -e "
+require('dotenv').config();
+const { client } = require('./db/db');
+client.execute('SELECT * FROM ad_postback_log ORDER BY received_at DESC LIMIT 10')
+  .then(r => console.log(JSON.stringify(r.rows, null, 2)));
+"
+```
+Or for an average CPM across everything logged so far:
+```sql
+SELECT AVG(estimated_price) * 1000 AS effective_cpm FROM ad_postback_log WHERE estimated_price > 0;
+```
+The admin panel's **Ad Revenue** section shows this same summary without
+needing to SSH in.
 
 Monetag's docs list only three formats for Mini Apps: **Rewarded
-Interstitial** (what's wired up here), **Rewarded Popup**, and **In-App
+Interstitial**, **Rewarded Popup** (what's wired up here), and **In-App
 Interstitial** (a passive, non-rewarded ad that appears automatically —
 no user action needed, and it isn't part of the verified-reward flow
 above since Monetag doesn't send postbacks for that format). There's no
 separate "native ads" format for Mini Apps in their current lineup.
 
-## 8. Test the whole thing
+## 8. Set up TON Connect (Tonkeeper wallet)
+
+Withdrawals pay out in TON, connected via Tonkeeper (or any TON Connect
+wallet) instead of a manually-typed address only:
+
+1. `frontend/public/tonconnect-manifest.json` needs to be reachable at
+   `https://your-frontend-url/tonconnect-manifest.json` in production —
+   Vercel serves everything in `public/` at the root automatically, so
+   this works with no extra config, but **edit the file first**: set
+   `url` to your actual Vercel URL, and `iconUrl` to
+   `https://your-frontend-url/coin.png` (the coin image already lives in
+   `public/coin.png`).
+2. That's it — no API key or account needed for TON Connect itself, it's
+   an open protocol. `frontend/src/tonConnect.js` handles the rest:
+   auto-reconnecting a returning user's Tonkeeper on load, and prompting
+   a fresh connection otherwise.
+3. One account can only ever have one TON wallet linked (enforced by a
+   unique index in the database, see `walletService.js`) — this is what
+   makes "the same Tonkeeper always resolves to the same account" work,
+   and what stops one wallet being used to farm multiple accounts.
+
+## 9. Test the whole thing
 
 Open your bot in Telegram, tap the menu button. The app should load
-inside Telegram, and API calls should reach your backend. Spinning or
-claiming a referral now genuinely requires watching a real Monetag ad —
-if you skip step 7, you'll see "Monetag SDK not loaded" instead of a
-working spin, which is expected until that's wired up.
+inside Telegram, and API calls should reach your backend. Spinning,
+claiming a referral, or starting the miner now genuinely requires
+watching a real Monetag ad — if you skip step 7, you'll see "Monetag SDK
+not loaded" instead of it working, which is expected until that's wired
+up. Connect a Tonkeeper wallet from the Profile tab to test withdrawals.
 
 ## Ongoing: reviewing withdrawals
 

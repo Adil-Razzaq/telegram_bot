@@ -28,6 +28,14 @@ const COLUMNS_TO_ENSURE = [
   { table: 'users', column: 'last_spin_at', ddl: 'DATETIME' },
   { table: 'users', column: 'referred_by', ddl: 'INTEGER' },
   { table: 'users', column: 'wallet_address', ddl: 'TEXT' },
+  // Miner redesign: passive/continuous -> manual, ad-gated, cycle-based.
+  { table: 'miner_state', column: 'status', ddl: "TEXT DEFAULT 'idle'" },
+  { table: 'miner_state', column: 'cycle_started_at', ddl: 'DATETIME' },
+  { table: 'miner_state', column: 'cycle_ends_at', ddl: 'DATETIME' },
+  { table: 'miner_state', column: 'cycles_completed_today', ddl: 'INTEGER DEFAULT 0' },
+  { table: 'miner_state', column: 'cycles_reset_date', ddl: "TEXT DEFAULT (date('now'))" },
+  // Real Monetag revenue per ad view, captured from the {estimated_price} macro.
+  { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
 ];
 
 async function ensureColumn(table, column, ddl) {
@@ -78,4 +86,22 @@ async function rolloverUserRefCounterIfNeeded(telegramId) {
   });
 }
 
-module.exports = { client, migrate, rolloverDailyCountersIfNeeded, rolloverUserRefCounterIfNeeded };
+async function rolloverMinerCyclesIfNeeded(telegramId) {
+  const today = new Date().toISOString().slice(0, 10);
+  // Only resets the count when the miner is idle — a cycle that started
+  // yesterday and is still counting down finishes out its full duration,
+  // it doesn't get cut short just because the calendar flipped.
+  await client.execute({
+    sql: `UPDATE miner_state SET cycles_completed_today = 0, cycles_reset_date = ?
+          WHERE telegram_id = ? AND cycles_reset_date != ? AND status = 'idle'`,
+    args: [today, telegramId, today],
+  });
+}
+
+module.exports = {
+  client,
+  migrate,
+  rolloverDailyCountersIfNeeded,
+  rolloverUserRefCounterIfNeeded,
+  rolloverMinerCyclesIfNeeded,
+};

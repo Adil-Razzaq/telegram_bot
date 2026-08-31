@@ -2,7 +2,8 @@ const express = require('express');
 const { adminAuth } = require('../middleware/adminAuth');
 const { sendTelegramMessage } = require('../utils/telegram');
 const { client } = require('../db/db');
-const { createTask, listAllTasksAdmin, setTaskActive } = require('../services/taskService');
+const { createTask, listAllTasksAdmin, setTaskActive, updateTask, deleteTask } = require('../services/taskService');
+const { getAllSettings, setSetting, DEFAULTS } = require('../utils/settings');
 const {
   listPendingWithdrawals,
   completeWithdrawal,
@@ -123,8 +124,12 @@ router.post('/withdrawal/reject', async (req, res) => {
 // API when the user claims it.
 router.post('/tasks', async (req, res) => {
   const { title, reward_points, link_url, task_type, telegram_channel_id, icon, sort_order } = req.body;
-  if (!title || !reward_points || !link_url) {
-    return res.status(400).json({ ok: false, error: 'title, reward_points, and link_url are required' });
+  const needsLink = task_type !== 'watch_ad';
+  if (!title || !reward_points || (needsLink && !link_url)) {
+    return res.status(400).json({
+      ok: false,
+      error: needsLink ? 'title, reward_points, and link_url are required' : 'title and reward_points are required',
+    });
   }
   try {
     const result = await createTask({
@@ -154,6 +159,83 @@ router.post('/tasks/:id/deactivate', async (req, res) => {
   try {
     await setTaskActive({ taskId: Number(req.params.id), active: false });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/tasks/:id/activate', async (req, res) => {
+  try {
+    await setTaskActive({ taskId: Number(req.params.id), active: true });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.patch('/tasks/:id', async (req, res) => {
+  try {
+    await updateTask({ taskId: Number(req.params.id), ...req.body });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.delete('/tasks/:id', async (req, res) => {
+  try {
+    await deleteTask({ taskId: Number(req.params.id) });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Settings: every admin-tunable number (point value, referral
+// reward, miner timing/payout) in one place.
+router.get('/settings', async (req, res) => {
+  try {
+    res.json({ ok: true, settings: await getAllSettings({ forceRefresh: true }), known_keys: Object.keys(DEFAULTS) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/settings', async (req, res) => {
+  const updates = req.body || {};
+  const keys = Object.keys(updates);
+  if (keys.length === 0) {
+    return res.status(400).json({ ok: false, error: 'Provide at least one setting, e.g. {"referral_reward": 100}' });
+  }
+  try {
+    for (const key of keys) await setSetting(key, updates[key]);
+    res.json({ ok: true, settings: await getAllSettings({ forceRefresh: true }) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Ad revenue: answers "how much did this click actually earn" and
+// "what's my real average CPM" straight from the raw postback log,
+// independent of the reward-gating logic in pending_ad_events.
+router.get('/ad-revenue', async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 500);
+    const recentRes = await client.execute({
+      sql: `SELECT ymid, telegram_id_macro, zone_id, event_type, reward_event_type, estimated_price, matched_pending_event, received_at
+            FROM ad_postback_log ORDER BY received_at DESC LIMIT ?`,
+      args: [limit],
+    });
+    const summaryRes = await client.execute(
+      `SELECT
+         COUNT(*) AS total_postbacks,
+         SUM(CASE WHEN reward_event_type IN ('yes','valued') THEN 1 ELSE 0 END) AS paid_postbacks,
+         SUM(estimated_price) AS total_revenue_usd,
+         AVG(CASE WHEN estimated_price > 0 THEN estimated_price END) AS avg_paid_price,
+         AVG(estimated_price) * 1000 AS effective_cpm
+       FROM ad_postback_log`
+    );
+    res.json({ ok: true, summary: summaryRes.rows[0], recent: recentRes.rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

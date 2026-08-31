@@ -18,23 +18,20 @@ const walletRoutes = require('./routes/wallet');
 
 const app = express();
 
-// Trust Azure internal proxy load balancers cleanly
-app.set('trust proxy', true);
+// You're behind nginx on the VM, which sets X-Forwarded-For. Without this,
+// express-rate-limit can't safely tell one visitor's IP from another's
+// (everyone would appear to share nginx's IP), and throws the
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR warning seen in your logs. `1` means
+// trust exactly one hop of proxy (nginx) — correct for this setup.
+app.set('trust proxy', 1);
 
-// Configure Helmet to allow cross-origin resource sharing for Telegram Mini Apps
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-    crossOriginOpenerPolicy: { policy: "unsafe-none" }
-  })
-);
+app.use(helmet());
 
-// Allow Vercel and Telegram web apps to talk to your Azure API seamlessly
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// Only your actual frontend can call this API — set FRONTEND_URL in
+// Render's env vars to your Vercel URL. Falls back to allow-all if unset
+// (fine for local dev, not for production).
+const allowedOrigin = process.env.FRONTEND_URL;
+app.use(cors(allowedOrigin ? { origin: allowedOrigin } : {}));
 
 app.use(express.json());
 
@@ -44,12 +41,17 @@ app.use(
     max: 60,
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: false },
   })
 );
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.get('/admin', (req, res) => {
+  // helmet's default CSP (applied globally above) blocks inline
+  // <script>/<style> tags, which is exactly what this simple
+  // single-file admin page uses. Overriding it just for this one
+  // response rather than weakening CSP everywhere else. The actual
+  // protection here is still adminAuth on every API call the page
+  // makes — this page itself contains no secrets or sensitive data.
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
@@ -67,7 +69,9 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/bot', botRoutes);
 
-// Central error handler
+// Central error handler. In production, unexpected (non-statusCode) errors
+// return a generic message instead of the raw error text, so internal
+// details never leak to a client.
 app.use((err, req, res, next) => {
   console.error(err);
   const isProd = process.env.NODE_ENV === 'production';

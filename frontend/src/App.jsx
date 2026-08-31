@@ -21,7 +21,13 @@ export default function App() {
     const user = tg?.initDataUnsafe?.user;
     if (user) {
       setTelegramId(user.id);
-      setDisplayName(user.username ? `@${user.username}` : user.first_name || 'Player');
+      // Full name as set on their actual Telegram account (first + last),
+      // not the @username — someone can go by a totally different
+      // username than their real display name, and this is meant to show
+      // the name they'd recognize themselves by, same as Telegram's own
+      // UI shows throughout the app.
+      const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+      setDisplayName(fullName || user.username || 'Player');
     }
 
     api
@@ -31,7 +37,7 @@ export default function App() {
       .finally(() => setBalanceLoaded(true));
   }, []);
 
-  const initial = (displayName || 'P').replace('@', '')[0]?.toUpperCase() || 'P';
+  const initial = (displayName || 'P')[0]?.toUpperCase() || 'P';
 
   return (
     <div className="app">

@@ -28,10 +28,15 @@ async function apiCall(path, { method = 'GET', body } = {}) {
 
 export const api = {
   getMe: () => apiCall('/user/me'),
+  getConfig: () => apiCall('/user/config'),
   minerStatus: () => apiCall('/miner/status'),
+  prepareMinerStart: () => apiCall('/miner/prepare-start', { method: 'POST' }),
+  startMiner: (nonce) => apiCall('/miner/start', { method: 'POST', body: { nonce } }),
   minerClaim: () => apiCall('/miner/claim', { method: 'POST' }),
   taskList: () => apiCall('/tasks/list'),
   claimTask: (taskId) => apiCall('/tasks/claim', { method: 'POST', body: { task_id: taskId } }),
+  prepareAdTask: (taskId) => apiCall('/tasks/prepare-ad', { method: 'POST', body: { task_id: taskId } }),
+  claimAdTask: (taskId, nonce) => apiCall('/tasks/claim-ad', { method: 'POST', body: { task_id: taskId, nonce } }),
   connectWallet: (address) => apiCall('/wallet/connect', { method: 'POST', body: { address } }),
   disconnectWallet: () => apiCall('/wallet/disconnect', { method: 'POST' }),
   prepareSpin: () => apiCall('/spin/prepare', { method: 'POST' }),

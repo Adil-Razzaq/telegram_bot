@@ -1,21 +1,24 @@
 const ZONE_ID = import.meta.env?.VITE_MONETAG_ZONE_ID;
 
 /**
- * Monetag's script tag (see index.html) exposes a global function named
- * show_<yourZoneId> — the name itself embeds your zone ID, which is why
- * this reads it dynamically off `window` rather than importing a fixed
- * function name.
+ * Rewarded Popup — opens the advertiser's page in a new tab/window and
+ * resolves once that's happened (not after any "watching" — it's a
+ * click-through format, which is why it commands a much higher CPM than
+ * Rewarded Interstitial). Every ad placement in the app uses this format
+ * now (spin, referral claim, miner start, and any watch_ad tasks) — a
+ * single show_<zoneId>() call, same as Monetag's own integration
+ * snippet, just with `ymid` added so our nonce round-trips through their
+ * postback the same way it did with the Interstitial format.
+ *
+ * MUST be called directly inside a user gesture (a click handler) — the
+ * browser blocks the new tab if anything is awaited before this call.
  */
 export function showRewardedAd(nonce) {
   const showFn = window[`show_${ZONE_ID}`];
   if (typeof showFn !== 'function') {
     return Promise.reject(new Error('Monetag SDK not loaded — check VITE_MONETAG_ZONE_ID and index.html'));
   }
-  // type: 'end' = show a Rewarded Interstitial and resolve once it's
-  // closed. ymid is echoed back in Monetag's server-side postback, which
-  // is what actually confirms the reward — this promise resolving only
-  // means the ad was displayed, not that it's been confirmed yet.
-  return showFn({ type: 'end', ymid: nonce });
+  return showFn({ type: 'pop', ymid: nonce });
 }
 
 /**
