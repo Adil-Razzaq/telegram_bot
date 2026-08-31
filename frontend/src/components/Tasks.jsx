@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 
+// Existing tasks store emoji icons (e.g. "🐦"); the new design uses
+// Material Symbols ligature names (e.g. "chat_bubble"). This renders
+// either correctly: a plain lowercase/underscore string is treated as a
+// Material Symbol, anything else (emoji, unicode) renders as-is — so
+// tasks created before this redesign keep working without a data
+// migration.
+function isMaterialSymbolName(icon) {
+  return /^[a-z0-9_]+$/.test(icon || '');
+}
+
 export default function Tasks({ onBalanceChange }) {
   const [tasks, setTasks] = useState(null);
   const [visited, setVisited] = useState({});
@@ -42,23 +52,35 @@ export default function Tasks({ onBalanceChange }) {
   }
 
   if (!tasks) {
-    return <div className="tasks-container">Loading tasks…</div>;
+    return (
+      <div className="tasks-page">
+        <p className="tasks-empty">Loading tasks…</p>
+      </div>
+    );
   }
 
   return (
-    <div className="tasks-container">
-      <h2>Earn Rewards</h2>
-      <p className="tasks-subtitle">Rewards go directly to your balance</p>
+    <div className="tasks-page">
+      <div className="tasks-header">
+        <h2>Earn Rewards</h2>
+        <p className="tasks-subtitle">Rewards go directly to your balance</p>
+      </div>
 
       {tasks.length === 0 && <p className="tasks-empty">No tasks available right now.</p>}
 
       <div className="tasks-list">
         {tasks.map((task) => (
           <div key={task.id} className="task-card">
-            <span className="task-icon">{task.icon}</span>
+            <span className="task-icon">
+              {isMaterialSymbolName(task.icon) ? (
+                <span className="material-symbols-outlined">{task.icon}</span>
+              ) : (
+                task.icon
+              )}
+            </span>
             <div className="task-info">
               <span className="task-title">{task.title}</span>
-              <span className="task-reward num">+{task.reward_points} pts</span>
+              <span className="task-reward">+{task.reward_points} ADLX</span>
             </div>
             {task.completed ? (
               <button className="task-button task-button-done" disabled>

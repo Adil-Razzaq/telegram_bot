@@ -117,13 +117,13 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       </div>
 
       <button className="spin-button" onClick={handleSpin} disabled={spinning || !canAfford}>
-        {spinning ? 'Spinning…' : canAfford ? 'Watch ad & Spin (100 pts)' : 'Not enough points'}
+        {spinning ? 'Spinning…' : canAfford ? 'Watch ad & Spin (100 ADLX)' : 'Not enough ADLX'}
       </button>
 
       {lastResult && !spinning && (
         <p className="spin-result">
           {lastResult.points_won > 0
-            ? `You won ${lastResult.points_won} points!`
+            ? `You won ${lastResult.points_won} ADLX!`
             : 'No win this time — try again.'}
         </p>
       )}

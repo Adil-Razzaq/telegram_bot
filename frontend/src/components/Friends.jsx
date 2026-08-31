@@ -107,7 +107,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
         <div className="friends-card-info">
           <span className="friends-card-label">Referral Reward</span>
           <span className="friends-card-value">
-            {availableClaims} available · +{status.reward_per_claim ?? 120} pts each
+            {availableClaims} available · +{status.reward_per_claim ?? 120} ADLX each
           </span>
         </div>
         <button className="friends-action-button" onClick={handleClaim} disabled={!canClaim}>

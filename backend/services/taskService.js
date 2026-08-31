@@ -11,16 +11,33 @@ const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOK
  * (fails closed: never grants credit on an unclear result).
  */
 async function isChannelMember(channelId, telegramId) {
+  let data;
   try {
     const res = await fetch(
       `${TELEGRAM_API}/getChatMember?chat_id=${encodeURIComponent(channelId)}&user_id=${telegramId}`
     );
-    const data = await res.json();
-    if (!data.ok) return false;
-    return ['member', 'administrator', 'creator'].includes(data.result.status);
+    data = await res.json();
   } catch (e) {
-    return false;
+    console.error('getChatMember request failed:', e.message);
+    const err = new Error('Membership check failed — network error contacting Telegram');
+    err.isVerificationError = true;
+    throw err;
   }
+
+  if (!data.ok) {
+    // This is the case that was silently swallowed before: Telegram
+    // couldn't answer the question at all — almost always because the
+    // bot isn't an admin of this channel, or the channel ID is wrong.
+    // That's a completely different problem from "user hasn't joined",
+    // and needs a different, actionable error message instead of being
+    // indistinguishable from it.
+    console.error(`getChatMember failed for ${channelId} — is the bot an admin of it? Telegram said: ${data.description}`);
+    const err = new Error(`Membership check failed: ${data.description || 'unknown Telegram API error'}`);
+    err.isVerificationError = true;
+    throw err;
+  }
+
+  return ['member', 'administrator', 'creator'].includes(data.result.status);
 }
 
 async function listTasksForUser({ telegramId }) {
@@ -69,7 +86,19 @@ async function claimTask({ telegramId, taskId }) {
   }
 
   if (task.task_type === 'telegram_join') {
-    const isMember = await isChannelMember(task.telegram_channel_id, telegramId);
+    let isMember;
+    try {
+      isMember = await isChannelMember(task.telegram_channel_id, telegramId);
+    } catch (e) {
+      if (e.isVerificationError) {
+        const err = new Error(
+          `Can't verify membership right now — make sure the bot is an admin of ${task.telegram_channel_id}, then try again`
+        );
+        err.statusCode = 503;
+        throw err;
+      }
+      throw e;
+    }
     if (!isMember) {
       const err = new Error("You haven't joined the channel yet — join it, then try again");
       err.statusCode = 400;

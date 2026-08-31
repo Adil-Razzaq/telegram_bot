@@ -535,43 +535,87 @@ h3 {
   font-size: 13px;
 }
 
-/* ---------- Tasks ---------- */
-.tasks-container { padding-top: 8px; }
+/* ---------- Tasks (emerald/glass design — scoped to this tab only,
+   the rest of the app keeps its graphite/amber system) ---------- */
+.tasks-page {
+  --tp-bg: #051424;
+  --tp-primary: #00e38b;
+  --tp-primary-container: #00ff9d;
+  --tp-on-primary-container: #00522f;
+  --tp-on-background: #d4e4fa;
+  --tp-on-surface-variant: #b9cbbc;
+  --tp-outline-variant: #3b4a3f;
+  --tp-glass: rgba(44, 58, 76, 0.6);
 
-.tasks-subtitle {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 0 0 16px;
+  margin: -4px -18px 0;
+  padding: 24px 18px 20px;
+  min-height: 100%;
+  background: var(--tp-bg);
+  background-image: radial-gradient(circle at 50% 0%, rgba(0, 227, 139, 0.12), transparent 55%);
+  font-family: 'Plus Jakarta Sans', var(--font-body);
 }
 
-.tasks-empty { color: var(--muted); font-size: 13px; }
+.tasks-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.tasks-header h2 {
+  font-family: 'Plus Jakarta Sans', var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  color: var(--tp-on-background);
+  margin: 0 0 6px;
+}
+
+.tasks-subtitle {
+  color: var(--tp-on-surface-variant);
+  font-size: 13px;
+  margin: 0;
+}
+
+.tasks-empty { color: var(--tp-on-surface-variant); font-size: 13px; text-align: center; }
 
 .tasks-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .task-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
+  gap: 14px;
+  background: var(--tp-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 14px;
+  transition: transform 0.1s ease;
 }
+
+.task-card:active { transform: scale(0.98); }
 
 .task-icon {
   font-size: 22px;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-2);
-  border-radius: 10px;
+  border-radius: 50%;
+  background: rgba(5, 20, 36, 0.5);
+  border: 1px solid rgba(59, 74, 63, 0.5);
+  color: var(--tp-on-surface-variant);
+}
+
+.task-icon .material-symbols-outlined {
+  font-size: 22px;
+  font-variation-settings: 'FILL' 1;
 }
 
 .task-info {
@@ -583,38 +627,53 @@ h3 {
 }
 
 .task-title {
-  font-size: 14px;
+  font-family: 'Plus Jakarta Sans', var(--font-display);
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--tp-on-background);
+}
+
+.task-subtext {
+  font-size: 12px;
+  color: var(--tp-on-surface-variant);
 }
 
 .task-reward {
-  font-size: 12px;
-  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tp-primary);
+  text-shadow: 0 0 8px rgba(0, 227, 139, 0.5);
 }
 
 .task-button {
-  background: var(--accent);
-  color: #16130a;
+  background: var(--tp-primary-container);
+  color: var(--tp-on-primary-container);
   border: none;
   padding: 9px 18px;
   border-radius: 999px;
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-family: 'Plus Jakarta Sans', var(--font-display);
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   flex-shrink: 0;
+  box-shadow: 0 0 15px rgba(0, 255, 157, 0.3);
 }
 
+.task-button:active { transform: scale(0.95); }
+
 .task-button-claim {
-  background: var(--success);
+  background: #34d399;
 }
 
 .task-button-done {
-  background: var(--surface-2);
-  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--tp-on-surface-variant);
+  box-shadow: none;
 }
 
-.tasks-error { color: var(--danger); font-size: 13px; }
+.tasks-error { color: #ffb4ab; font-size: 13px; text-align: center; margin-top: 10px; }
 
 /* ---------- Wallet connect ---------- */
 .wallet-connect-row {
@@ -623,6 +682,7 @@ h3 {
   gap: 10px;
   margin: 14px 0;
 }
+
 
 .wallet-connect-button {
   background: var(--surface-2);

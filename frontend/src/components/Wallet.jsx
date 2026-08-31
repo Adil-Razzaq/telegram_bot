@@ -120,7 +120,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         </div>
       )}
       <p className="wallet-balance">
-        Balance: <strong>{mainBalance}</strong> pts (${(mainBalance / POINTS_PER_USD).toFixed(2)})
+        Balance: <strong>{mainBalance}</strong> ADLX (${(mainBalance / POINTS_PER_USD).toFixed(2)})
       </p>
 
       <div className="wallet-connect-row">
@@ -156,7 +156,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         </label>
 
         <label>
-          Points to withdraw (min {MIN_WITHDRAWAL_POINTS})
+          ADLX to withdraw (min {MIN_WITHDRAWAL_POINTS})
           <input
             type="number"
             value={points}
@@ -187,7 +187,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
           {history.map((w) => (
             <li key={w.id} className={`wallet-history-item status-${w.status.toLowerCase()}`}>
               <div>
-                <strong>${w.amount_usd.toFixed(2)}</strong> ({w.points_deducted} pts)
+                <strong>${w.amount_usd.toFixed(2)}</strong> ({w.points_deducted} ADLX)
                 <span className={`status-badge status-${w.status.toLowerCase()}`}>{w.status}</span>
               </div>
               <div className="wallet-history-meta">

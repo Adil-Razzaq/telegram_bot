@@ -71,7 +71,7 @@ export default function Miner({ mainBalance, onBalanceChange }) {
       <div className="miner-stats-row">
         <div className="miner-stat-pill">
           <span className="miner-stat-label">Rate</span>
-          <span className="miner-stat-value num">{status.rate_per_day.toFixed(0)} pts/day</span>
+          <span className="miner-stat-value num">{status.rate_per_day.toFixed(0)} ADLX/day</span>
         </div>
         <div className="miner-stat-pill">
           <span className="miner-stat-label">Boost</span>

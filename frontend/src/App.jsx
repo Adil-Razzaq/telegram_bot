@@ -40,7 +40,7 @@ export default function App() {
           <span className="user-avatar">{initial}</span>
           <span className="user-name">{displayName || 'Player'}</span>
         </div>
-        <span className="balance-pill num">{balanceLoaded ? `${mainBalance} pts` : '…'}</span>
+        <span className="balance-pill num">{balanceLoaded ? `${mainBalance} ADLX` : '…'}</span>
       </header>
 
       <main className="app-main">
