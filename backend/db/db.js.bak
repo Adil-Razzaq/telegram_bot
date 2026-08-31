@@ -18,18 +18,23 @@ const client = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
+// Columns that have been added to users/spin_pool over time. migrate()
+// checks each one against the live database and ALTERs it in if missing —
+// this is what makes it safe to redeploy after a schema change without a
+// manual migration step, whether the database is brand new or already has
+// data in it.
 const COLUMNS_TO_ENSURE = [
   { table: 'users', column: 'username', ddl: 'TEXT' },
   { table: 'users', column: 'last_spin_at', ddl: 'DATETIME' },
   { table: 'users', column: 'referred_by', ddl: 'INTEGER' },
   { table: 'users', column: 'wallet_address', ddl: 'TEXT' },
+  // Miner redesign: passive/continuous -> manual, ad-gated, cycle-based.
   { table: 'miner_state', column: 'status', ddl: "TEXT DEFAULT 'idle'" },
   { table: 'miner_state', column: 'cycle_started_at', ddl: 'DATETIME' },
   { table: 'miner_state', column: 'cycle_ends_at', ddl: 'DATETIME' },
   { table: 'miner_state', column: 'cycles_completed_today', ddl: 'INTEGER DEFAULT 0' },
-  // SQLite forbids non-constant defaults (e.g. date('now')) on ALTER TABLE
-  // ADD COLUMN, so this is added plain and backfilled below in migrate().
-  { table: 'miner_state', column: 'cycles_reset_date', ddl: 'TEXT' },
+  { table: 'miner_state', column: 'cycles_reset_date', ddl: "TEXT DEFAULT (date('now'))" },
+  // Real Monetag revenue per ad view, captured from the {estimated_price} macro.
   { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
 ];
 
@@ -44,17 +49,20 @@ async function ensureColumn(table, column, ddl) {
 
 async function migrate() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  // libSQL's executeMultiple runs a whole .sql file of statements at once.
+  // CREATE TABLE IF NOT EXISTS handles brand-new tables fine, but it's a
+  // no-op on a table that already exists — it will NOT add new columns to
+  // it. That's what the loop below is for.
   await client.executeMultiple(schema);
   for (const { table, column, ddl } of COLUMNS_TO_ENSURE) {
     await ensureColumn(table, column, ddl);
   }
 
-  // One-time backfill: cycles_reset_date has no DB-level default, so any
-  // row that just got the column added still has it NULL. Set it explicitly.
-  await client.execute(
-    `UPDATE miner_state SET cycles_reset_date = date('now') WHERE cycles_reset_date IS NULL`
-  );
-
+  // This index depends on wallet_address, which the loop above may have
+  // JUST added on an existing database — so it has to run after that
+  // loop, never bundled into the schema.sql batch above (which runs
+  // before any column-healing and would fail with "no such column" on a
+  // database that predates this feature).
   await client.execute(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address) WHERE wallet_address IS NOT NULL'
   );
@@ -80,6 +88,9 @@ async function rolloverUserRefCounterIfNeeded(telegramId) {
 
 async function rolloverMinerCyclesIfNeeded(telegramId) {
   const today = new Date().toISOString().slice(0, 10);
+  // Only resets the count when the miner is idle — a cycle that started
+  // yesterday and is still counting down finishes out its full duration,
+  // it doesn't get cut short just because the calendar flipped.
   await client.execute({
     sql: `UPDATE miner_state SET cycles_completed_today = 0, cycles_reset_date = ?
           WHERE telegram_id = ? AND cycles_reset_date != ? AND status = 'idle'`,
