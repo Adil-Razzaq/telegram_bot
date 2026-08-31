@@ -23,7 +23,7 @@ const app = express();
 // (everyone would appear to share nginx's IP), and throws the
 // ERR_ERL_UNEXPECTED_X_FORWARDED_FOR warning seen in your logs. `1` means
 // trust exactly one hop of proxy (nginx) — correct for this setup.
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 
 app.use(helmet());
 
