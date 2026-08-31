@@ -241,4 +241,66 @@ router.get('/ad-revenue', async (req, res) => {
   }
 });
 
+// --- Coin stats: platform-wide totals for how many points have been
+// generated overall and where they currently sit — total ever credited
+// to users (from the ledger, independent of what's since been spent on
+// withdrawals), how much is spendable right now (main_balance), how much
+// is sitting unclaimed as referral rewards (pending_referral_balance),
+// and how many points are tied up in withdrawal requests (pending vs
+// already paid out). usd_per_point comes from the same points_per_usd
+// setting you already control from the Settings card above — update
+// that whenever your real conversion rate changes and every USDT figure
+// here updates with it, no separate rate to keep in sync.
+router.get('/coin-stats', async (req, res) => {
+  try {
+    const generatedRes = await client.execute(
+      `SELECT COALESCE(SUM(points_delta), 0) AS total_generated
+       FROM ledger WHERE points_delta > 0`
+    );
+    const balancesRes = await client.execute(
+      `SELECT
+         COALESCE(SUM(main_balance), 0) AS available_balance,
+         COALESCE(SUM(pending_referral_balance), 0) AS pending_balance
+       FROM users`
+    );
+    const withdrawalsRes = await client.execute(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status = 'PENDING' THEN points_deducted END), 0) AS pending_withdrawal_points,
+         COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN points_deducted END), 0) AS completed_withdrawal_points
+       FROM withdrawals`
+    );
+    const { points_per_usd: pointsPerUsd } = await getAllSettings();
+
+    const totalGenerated = generatedRes.rows[0].total_generated;
+    const availableBalance = balancesRes.rows[0].available_balance;
+    const pendingBalance = balancesRes.rows[0].pending_balance;
+    const pendingWithdrawalPoints = withdrawalsRes.rows[0].pending_withdrawal_points;
+    const completedWithdrawalPoints = withdrawalsRes.rows[0].completed_withdrawal_points;
+    const total = availableBalance + pendingBalance + pendingWithdrawalPoints;
+
+    const toUsd = (points) => points / pointsPerUsd;
+
+    res.json({
+      ok: true,
+      stats: {
+        points_per_usd: pointsPerUsd,
+        total_generated: totalGenerated,
+        total_generated_usd: toUsd(totalGenerated),
+        available_balance: availableBalance,
+        available_balance_usd: toUsd(availableBalance),
+        pending_balance: pendingBalance,
+        pending_balance_usd: toUsd(pendingBalance),
+        pending_withdrawal_points: pendingWithdrawalPoints,
+        pending_withdrawal_usd: toUsd(pendingWithdrawalPoints),
+        completed_withdrawal_points: completedWithdrawalPoints,
+        completed_withdrawal_usd: toUsd(completedWithdrawalPoints),
+        total,
+        total_usd: toUsd(total),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

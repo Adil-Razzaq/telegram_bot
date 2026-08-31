@@ -116,6 +116,13 @@
     <div id="settingsStatus" class="status-msg"></div>
   </div>
 
+  <h2>Coin Stats</h2>
+  <div class="card">
+    <p class="muted">Platform-wide totals across all users.</p>
+    <div id="coinStatsSummary">Loading…</div>
+    <button class="secondary" onclick="loadCoinStats()" style="margin-top:8px">Refresh</button>
+  </div>
+
   <h2>Ad Revenue</h2>
   <div class="card">
     <p class="muted">Real numbers from Monetag's own postbacks — independent of app reward logic.</p>
@@ -292,6 +299,27 @@
     }
   }
 
+  async function loadCoinStats() {
+    const el = document.getElementById('coinStatsSummary');
+    el.textContent = 'Loading…';
+    try {
+      const { stats } = await adminFetch('/admin/coin-stats');
+      const fmt = (n) => n.toLocaleString();
+      const usd = (n) => `$${n.toFixed(4)}`;
+      el.innerHTML = `
+        <div class="muted" style="margin-bottom:6px">Rate: ${fmt(stats.points_per_usd)} pts = $1 (change under Settings)</div>
+        <div>Total coins generated (all-time): <strong>${fmt(stats.total_generated)}</strong> <span class="muted">(${usd(stats.total_generated_usd)})</span></div>
+        <div>Available balance (spendable now): <strong>${fmt(stats.available_balance)}</strong> <span class="muted">(${usd(stats.available_balance_usd)})</span></div>
+        <div>Pending balance (unclaimed referrals): <strong>${fmt(stats.pending_balance)}</strong> <span class="muted">(${usd(stats.pending_balance_usd)})</span></div>
+        <div>Pending withdrawals (requested, not yet paid): <strong>${fmt(stats.pending_withdrawal_points)}</strong> <span class="muted">(${usd(stats.pending_withdrawal_usd)})</span></div>
+        <div>Completed withdrawals (already paid out): <strong>${fmt(stats.completed_withdrawal_points)}</strong> <span class="muted">(${usd(stats.completed_withdrawal_usd)})</span></div>
+        <div style="margin-top:6px">Total (available + pending referral + pending withdrawal): <strong>${fmt(stats.total)}</strong> <span class="muted">(${usd(stats.total_usd)})</span></div>
+      `;
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
   async function loadAdRevenue() {
     const el = document.getElementById('adRevenueSummary');
     el.textContent = 'Loading…';
@@ -314,6 +342,7 @@
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
     loadSettings();
+    loadCoinStats();
     loadAdRevenue();
   }
 
