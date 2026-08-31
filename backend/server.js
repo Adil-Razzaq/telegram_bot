@@ -41,6 +41,7 @@ app.use(
     max: 60,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { trustProxy: false },
   })
 );
 
