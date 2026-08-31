@@ -5,6 +5,7 @@ import SpinWheel from './components/SpinWheel';
 import Friends from './components/Friends';
 import Wallet from './components/Wallet';
 import { api } from './api';
+import { enableInAppInterstitial } from './monetag';
 import './styles/app.css';
 
 export default function App() {
@@ -35,6 +36,11 @@ export default function App() {
       .then((me) => setMainBalance(me.main_balance ?? 0))
       .catch(() => {})
       .finally(() => setBalanceLoaded(true));
+
+    // Passive In-App Interstitial ads: first one 7s after open, then
+    // auto-repeats (including across tab switches within the app) per
+    // its own settings. Called once here, not per-tab/component.
+    enableInAppInterstitial();
   }, []);
 
   const initial = (displayName || 'P')[0]?.toUpperCase() || 'P';
