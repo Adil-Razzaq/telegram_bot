@@ -85,7 +85,7 @@ move to Render's paid tier or another always-on host.
    - `VITE_API_BASE` = `https://your-backend-url/api` (with `/api` on the end)
    - `VITE_BOT_USERNAME` = your bot's username, **without** the @ (e.g.
      `BNBXpert_bot`) — this is what `Friends.jsx` uses to build each
-     user's `https://t.me/YourBot?start=ref_123` invite link. **Without
+     user's `https://t.me/YourBot?startapp=ref_123` invite link. **Without
      this set, no referral link is ever generated at all** — the Friends
      tab just shows a "Set VITE_BOT_USERNAME" placeholder instead of a
      link, and nobody can be referred, no matter how correct the backend
@@ -98,6 +98,42 @@ move to Render's paid tier or another always-on host.
 Back in BotFather (step 2.4): **Configure menu button** → paste your
 Vercel URL (`https://your-app.vercel.app`) → give the button a label like
 "Play". Also set this same URL wherever BotFather asks for your Mini
+
+## 6b. Register the bot's webhook — REQUIRED, easy to miss
+
+Without this step, your bot will never respond to `/start`, never send
+the welcome message, and referral links opened via the older `start=`
+format will silently do nothing — Telegram just holds the message and
+never forwards it to your server. This is a one-time `curl` command, not
+a dashboard setting anywhere:
+
+```
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-backend-url/bot/webhook/<YOUR_BOT_WEBHOOK_SECRET>"
+```
+
+Replace `<YOUR_BOT_TOKEN>` with the token from step 2.3, and
+`<YOUR_BOT_WEBHOOK_SECRET>` with the value you set for `BOT_WEBHOOK_SECRET`
+in your backend's `.env`. You should get back
+`{"ok":true,"result":true,"description":"Webhook was set"}`.
+
+**Verify it actually took:**
+```
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
+```
+Check the response's `url` field matches your backend exactly, and
+`last_error_message` is empty (a non-empty error there means Telegram
+tried to reach your server and failed — usually a typo in the URL or the
+backend not actually running).
+
+**Note on referral links specifically:** as of this version, the invite
+link uses `https://t.me/YourBot?startapp=ref_123` (not `?start=`) —
+`startapp` opens the Mini App directly and delivers the referral code
+via `initDataUnsafe.start_param`, which the frontend reads and registers
+itself (`POST /api/referral/register`), working even if this webhook
+step is skipped or ever breaks. Registering the webhook is still
+required for the bot to respond to messages and send the welcome
+message with the Play button — just no longer a single point of failure
+for referral crediting specifically.
 App's URL if you set one up via `/newapp`.
 
 ## 7. Set up Monetag ads
