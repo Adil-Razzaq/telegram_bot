@@ -1,40 +1,49 @@
 const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
 const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { getAllSettings } = require('../utils/settings');
 
-const ENTRY_FEE = 100;
-
-// Base probabilities. These only apply among segments that are currently
-// ELIGIBLE (see isEligible below) — ineligible segments are removed and
-// the remaining weights are renormalized, so on a day/pool state where
-// segments 5 & 6 are locked, segments 1-4 absorb their combined 5%
-// probability proportionally rather than that probability mass vanishing.
-const SEGMENTS = [
-  { index: 1, payout: 10, weight: 0.40 },
-  { index: 2, payout: 20, weight: 0.30 },
-  { index: 3, payout: 50, weight: 0.15 },
-  { index: 4, payout: 100, weight: 0.10 },
-  {
-    index: 5,
-    payout: 200,
-    weight: 0.04,
-    isEligible: (pool) => pool.daily_collected >= 400,
-  },
+// Base probabilities only — the actual payout AMOUNTS now come from
+// settings (spin_payout_1..6, admin-editable), so this only defines the
+// odds and the pool-affordability/unlock rules per segment slot.
+const SEGMENT_WEIGHTS = [
+  { index: 1, weight: 0.40 },
+  { index: 2, weight: 0.30 },
+  { index: 3, weight: 0.15 },
+  { index: 4, weight: 0.10 },
+  { index: 5, weight: 0.04, isEligible: (pool) => pool.daily_collected >= 400 },
   {
     index: 6,
-    payout: 500,
     weight: 0.01,
-    isEligible: (pool) => pool.daily_collected >= 5000 && pool.current_pool_points >= 500,
+    isEligible: (pool, payout) => pool.daily_collected >= 5000 && pool.current_pool_points >= payout,
   },
 ];
 
-function pickSegment(pool) {
+async function getSpinConfig() {
+  const settings = await getAllSettings();
+  const payouts = {
+    1: settings.spin_payout_1,
+    2: settings.spin_payout_2,
+    3: settings.spin_payout_3,
+    4: settings.spin_payout_4,
+    5: settings.spin_payout_5,
+    6: settings.spin_payout_6,
+  };
+  const segments = SEGMENT_WEIGHTS.map((seg) => ({ ...seg, payout: payouts[seg.index] }));
+  return {
+    entryFee: settings.spin_entry_fee,
+    freeSpins: settings.spin_free_spins,
+    segments,
+  };
+}
+
+function pickSegment(segments, pool) {
   // A segment is only offered if (a) any segment-specific unlock condition
   // passes, AND (b) the pool can actually afford the payout without going
   // negative — this is the "server evaluates available SpinPool points
   // BEFORE determining outcome" insolvency guard from the spec.
-  const eligible = SEGMENTS.filter((seg) => {
+  const eligible = segments.filter((seg) => {
     if (seg.payout > pool.current_pool_points) return false;
-    if (seg.isEligible && !seg.isEligible(pool)) return false;
+    if (seg.isEligible && !seg.isEligible(pool, seg.payout)) return false;
     return true;
   });
 
@@ -48,9 +57,24 @@ function pickSegment(pool) {
 }
 
 /**
- * Plays one spin for telegramId. Throws Error with .statusCode for the
- * route layer to translate into an HTTP response.
+ * Public config for the frontend — current payouts, entry fee, and how
+ * many free spins this specific user has left. Lets the wheel's labels
+ * and cost text always reflect whatever's actually configured right now,
+ * instead of stale hardcoded values baked into the frontend bundle.
  */
+async function getSpinConfigForUser({ telegramId }) {
+  const [config, userRes] = await Promise.all([
+    getSpinConfig(),
+    client.execute({ sql: 'SELECT free_spins_used FROM users WHERE telegram_id = ?', args: [telegramId] }),
+  ]);
+  const used = userRes.rows[0]?.free_spins_used ?? 0;
+  return {
+    entry_fee: config.entryFee,
+    payouts: config.segments.map((s) => ({ index: s.index, payout: s.payout })),
+    free_spins_remaining: Math.max(0, config.freeSpins - used),
+  };
+}
+
 async function prepareSpin({ telegramId }) {
   return startAdEvent({ telegramId, action: 'spin' });
 }
@@ -70,6 +94,8 @@ async function playSpin({ telegramId, nonce }) {
   // and it's not exploitable (a wasted ad view costs the user, not us).
   await consumeAdEvent({ nonce, telegramId, action: 'spin' });
 
+  const config = await getSpinConfig();
+
   const tx = await client.transaction('write');
   try {
     const userRes = await tx.execute({
@@ -83,32 +109,42 @@ async function playSpin({ telegramId, nonce }) {
       throw err;
     }
 
-    if (user.main_balance < ENTRY_FEE) {
+    const isFreeSpin = (user.free_spins_used || 0) < config.freeSpins;
+    const entryFee = isFreeSpin ? 0 : config.entryFee;
+
+    if (!isFreeSpin && user.main_balance < entryFee) {
       const err = new Error('Insufficient balance for spin entry fee');
       err.statusCode = 400;
       throw err;
     }
 
-    // 1. Deduct entry fee from user, stamp last_spin_at, add to pool + daily_collected
+    // 1. Deduct entry fee (0 for a free spin), stamp last_spin_at, track
+    // free-spin usage, add to pool + daily_collected (a free spin still
+    // funds the pool at the same amount a paid entry would have, so the
+    // payout pool isn't starved by giving new users free spins).
     await tx.execute({
-      sql: 'UPDATE users SET main_balance = main_balance - ?, last_spin_at = CURRENT_TIMESTAMP WHERE telegram_id = ?',
-      args: [ENTRY_FEE, telegramId],
+      sql: `UPDATE users
+            SET main_balance = main_balance - ?,
+                last_spin_at = CURRENT_TIMESTAMP,
+                free_spins_used = free_spins_used + ?
+            WHERE telegram_id = ?`,
+      args: [entryFee, isFreeSpin ? 1 : 0, telegramId],
     });
     await tx.execute({
       sql: 'UPDATE spin_pool SET current_pool_points = current_pool_points + ?, daily_collected = daily_collected + ? WHERE id = 1',
-      args: [ENTRY_FEE, ENTRY_FEE],
+      args: [config.entryFee, config.entryFee],
     });
     await tx.execute({
       sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
-      args: [telegramId, 'spin_entry', -ENTRY_FEE, JSON.stringify({})],
+      args: [telegramId, 'spin_entry', -entryFee, JSON.stringify({ free_spin: isFreeSpin })],
     });
 
     // 2. Evaluate pool state AFTER the entry fee lands, then pick a segment
     const poolRes = await tx.execute('SELECT * FROM spin_pool WHERE id = 1');
     const pool = poolRes.rows[0];
-    const segment = pickSegment(pool);
+    const segment = pickSegment(config.segments, pool);
 
-    // 3. Pay out (segment 1 pays 0, no-op update kept for symmetry/audit)
+    // 3. Pay out
     if (segment.payout > 0) {
       await tx.execute({
         sql: 'UPDATE users SET main_balance = main_balance + ? WHERE telegram_id = ?',
@@ -138,7 +174,9 @@ async function playSpin({ telegramId, nonce }) {
     return {
       segment_index: segment.index,
       points_won: segment.payout,
+      was_free_spin: isFreeSpin,
       main_balance: updatedUser.main_balance,
+      free_spins_remaining: Math.max(0, config.freeSpins - updatedUser.free_spins_used),
       pool_snapshot: {
         current_pool_points: updatedPool.current_pool_points,
         daily_collected: updatedPool.daily_collected,
@@ -150,4 +188,4 @@ async function playSpin({ telegramId, nonce }) {
   }
 }
 
-module.exports = { prepareSpin, playSpin, ENTRY_FEE, SEGMENTS };
+module.exports = { prepareSpin, playSpin, getSpinConfigForUser };

@@ -128,18 +128,23 @@ export default function App() {
 
       <nav className="app-tabs">
         <button className={tab === 'miner' ? 'active' : ''} onClick={() => setTab('miner')}>
+          <span className="material-symbols-outlined">bolt</span>
           Mine
         </button>
         <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>
+          <span className="material-symbols-outlined">assignment</span>
           Tasks
         </button>
         <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
+          <span className="material-symbols-outlined">casino</span>
           Spin
         </button>
         <button className={tab === 'friends' ? 'active' : ''} onClick={() => setTab('friends')}>
+          <span className="material-symbols-outlined">group</span>
           Friends
         </button>
         <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}>
+          <span className="material-symbols-outlined">person</span>
           Profile
         </button>
       </nav>

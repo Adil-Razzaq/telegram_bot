@@ -40,6 +40,7 @@ export const api = {
   claimAdTask: (taskId, nonce) => apiCall('/tasks/claim-ad', { method: 'POST', body: { task_id: taskId, nonce } }),
   connectWallet: (address) => apiCall('/wallet/connect', { method: 'POST', body: { address } }),
   disconnectWallet: () => apiCall('/wallet/disconnect', { method: 'POST' }),
+  spinConfig: () => apiCall('/spin/config'),
   prepareSpin: () => apiCall('/spin/prepare', { method: 'POST' }),
   playSpin: (nonce) => apiCall('/spin/play', { method: 'POST', body: { nonce } }),
   referralStatus: () => apiCall('/referral/status'),

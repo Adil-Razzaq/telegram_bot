@@ -31,6 +31,7 @@ const COLUMNS_TO_ENSURE = [
   // ADD COLUMN, so this is added plain and backfilled below in migrate().
   { table: 'miner_state', column: 'cycles_reset_date', ddl: 'TEXT' },
   { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
+  { table: 'users', column: 'free_spins_used', ddl: 'INTEGER DEFAULT 0' },
 ];
 
 async function ensureColumn(table, column, ddl) {

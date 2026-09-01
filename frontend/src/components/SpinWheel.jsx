@@ -1,18 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
-// Order/colors must match backend SEGMENTS in services/spinService.js —
-// palette shifted to the app's gold/emerald theme (was blue/gold).
-const SEGMENTS = [
-  { index: 1, label: '10', color: '#0d2a20' },
-  { index: 2, label: '20', color: '#0f3b2c' },
-  { index: 3, label: '50', color: '#124d38' },
-  { index: 4, label: '100', color: '#8a6a2a' },
-  { index: 5, label: '200', color: '#b5822e' },
-  { index: 6, label: '500', color: '#d69e2e' },
-];
-const SEGMENT_ANGLE = 360 / SEGMENTS.length;
+// Colors/positions stay client-side (purely visual) — alternating
+// teal/gold so the wheel reads as one cohesive design instead of a
+// half-and-half split. The actual payout NUMBERS come from the backend
+// (see api.spinConfig()) so an admin editing them in the settings panel
+// is reflected here without a frontend redeploy.
+const SEGMENT_COLORS = ['#0f3b2c', '#b5822e', '#146b4a', '#d69e2e', '#1a8f63', '#f0b955'];
+const SEGMENT_ANGLE = 360 / SEGMENT_COLORS.length;
 const SIZE = 300;
 const CENTER = SIZE / 2;
 const RADIUS = CENTER - 6;
@@ -29,35 +25,46 @@ function wedgePath(startAngle, endAngle) {
   return `M ${CENTER},${CENTER} L ${start.x},${start.y} A ${RADIUS},${RADIUS} 0 0,1 ${end.x},${end.y} Z`;
 }
 
-/**
- * Gates the spin on: getting a nonce from the backend, showing the
- * Monetag ad with that nonce as ymid, then spending the nonce — which
- * only succeeds once Monetag's postback has confirmed it server-side
- * (see backend/utils/monetagAds.js).
- */
-
 export default function SpinWheel({ mainBalance, onBalanceChange }) {
+  const [config, setConfig] = useState(null);
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [lastResult, setLastResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const canAfford = mainBalance >= 100;
+  useEffect(() => {
+    api
+      .spinConfig()
+      .then(setConfig)
+      .catch((e) => setError(e.message));
+  }, []);
 
-  const wedges = useMemo(
-    () =>
-      SEGMENTS.map((seg, i) => {
-        const start = i * SEGMENT_ANGLE;
-        const end = start + SEGMENT_ANGLE;
-        const mid = start + SEGMENT_ANGLE / 2;
-        const labelPos = polarPoint(mid, LABEL_RADIUS);
-        return { ...seg, path: wedgePath(start, end), labelPos, mid };
-      }),
-    []
-  );
+  const segments = useMemo(() => {
+    if (!config) return [];
+    return config.payouts.map((p, i) => ({
+      index: p.index,
+      label: String(p.payout),
+      color: SEGMENT_COLORS[i],
+    }));
+  }, [config]);
+
+  const wedges = useMemo(() => {
+    if (segments.length === 0) return [];
+    return segments.map((seg, i) => {
+      const start = i * SEGMENT_ANGLE;
+      const end = start + SEGMENT_ANGLE;
+      const mid = start + SEGMENT_ANGLE / 2;
+      const labelPos = polarPoint(mid, LABEL_RADIUS);
+      return { ...seg, path: wedgePath(start, end), labelPos, mid };
+    });
+  }, [segments]);
+
+  const isFreeSpin = (config?.free_spins_remaining ?? 0) > 0;
+  const entryFee = config?.entry_fee ?? 100;
+  const canAfford = isFreeSpin || mainBalance >= entryFee;
 
   async function handleSpin() {
-    if (spinning || !canAfford) return;
+    if (spinning || !canAfford || !config) return;
     setError(null);
     setSpinning(true);
     try {
@@ -65,8 +72,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       await showRewardedAd(nonce);
       const result = await withConfirmationRetry(() => api.playSpin(nonce));
 
-      const targetSegment = SEGMENTS.find((s) => s.index === result.segment_index);
-      const targetIndex = SEGMENTS.indexOf(targetSegment);
+      const targetIndex = segments.findIndex((s) => s.index === result.segment_index);
       const segmentCenter = targetIndex * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
       const fullSpins = 5 * 360;
       const nextRotation = rotation + fullSpins + (360 - segmentCenter);
@@ -75,6 +81,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       setTimeout(() => {
         setLastResult(result);
         onBalanceChange(result.main_balance);
+        setConfig((prev) => (prev ? { ...prev, free_spins_remaining: result.free_spins_remaining } : prev));
         setSpinning(false);
       }, 4000);
     } catch (e) {
@@ -99,7 +106,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
               transition: spinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.3, 1)' : 'none',
             }}
           >
-            {wedges.map((w) => (
+            {wedges.map((w, i) => (
               <g key={w.index}>
                 <path d={w.path} fill={w.color} stroke="#051424" strokeWidth="2" />
                 <text
@@ -111,7 +118,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight="600"
                   fontSize={w.label.length > 2 ? 22 : 26}
-                  fill={w.index >= 4 ? '#1a1300' : '#d4e4fa'}
+                  fill={i % 2 === 1 ? '#1a1300' : '#d4e4fa'}
                 >
                   {w.label}
                 </text>
@@ -122,8 +129,18 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
         </div>
       </div>
 
-      <button className="gold-button spin-button" onClick={handleSpin} disabled={spinning || !canAfford}>
-        {spinning ? 'Spinning…' : canAfford ? 'Watch ad & Spin (100 ADLX)' : 'Not enough ADLX'}
+      {isFreeSpin && <p className="spin-free-badge">🎁 Free spin — {config.free_spins_remaining} left</p>}
+
+      <button className="gold-button spin-button" onClick={handleSpin} disabled={spinning || !canAfford || !config}>
+        {spinning
+          ? 'Spinning…'
+          : !config
+          ? 'Loading…'
+          : isFreeSpin
+          ? 'Watch ad & Spin (Free)'
+          : canAfford
+          ? `Watch ad & Spin (${entryFee} ADLX)`
+          : 'Not enough ADLX'}
       </button>
 
       {lastResult && !spinning && (

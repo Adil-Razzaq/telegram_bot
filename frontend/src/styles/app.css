@@ -123,9 +123,11 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   align-items: center;
   border-top: 1px solid var(--border);
   background: rgba(13, 20, 30, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   position: sticky;
   bottom: 0;
-  padding-bottom: env(safe-area-inset-bottom, 8px);
+  padding: 6px 8px calc(env(safe-area-inset-bottom, 8px) + 6px);
 }
 
 .app-tabs button {
@@ -133,21 +135,35 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 4px 12px;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  margin: 0 3px;
+  padding: 8px 4px;
   background: none;
   border: none;
+  border-radius: 16px;
   color: var(--muted);
   font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  transition: color 0.15s ease, transform 0.15s ease;
+  transition: color 0.15s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.app-tabs button .material-symbols-outlined {
+  font-size: 22px;
+  transition: font-variation-settings 0.15s ease;
 }
 
 .app-tabs button.active {
   color: var(--gold-light);
-  filter: drop-shadow(0 0 8px var(--gold-glow));
+  background: rgba(214, 158, 46, 0.14);
+}
+
+.app-tabs button.active .material-symbols-outlined {
+  font-variation-settings: 'FILL' 1;
+  filter: drop-shadow(0 0 6px var(--gold-glow));
 }
 
 .app-tabs button:active {
@@ -374,6 +390,18 @@ h3 {
   color: var(--success);
   font-weight: 600;
   font-size: 15px;
+}
+
+.spin-free-badge {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--gold-light);
+  background: rgba(214, 158, 46, 0.14);
+  border: 1px solid rgba(214, 158, 46, 0.3);
+  border-radius: 999px;
+  padding: 6px 16px;
+  margin: 0;
 }
 
 .spin-error, .referral-error, .wallet-error {
@@ -848,9 +876,24 @@ h3 {
 
   margin: -4px -18px 0;
   padding: 24px 18px 20px;
-  min-height: 100%;
-  background: var(--tp-bg);
-  background-image: radial-gradient(circle at 50% 0%, rgba(0, 227, 139, 0.12), transparent 55%);
+  /* min-height:100% needs every ancestor to have a definite (not
+     flex-derived) height to resolve reliably — it doesn't here, which is
+     why this only covered as much as its own content, leaving the rest
+     of the screen showing whatever's behind it. 100dvh is measured
+     against the real viewport instead, so it reliably covers the full
+     screen regardless of how tall the task list itself is. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--tp-bg);
+  /* The marble/circuit image is layered UNDER the green glow gradient —
+     before, only the gradient was here, so the image only ever showed
+     through in the gap below this element's short content-based height. */
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(0, 227, 139, 0.16), transparent 55%),
+    url('/bg.png');
+  background-size: auto, cover;
+  background-position: center, center top;
+  background-repeat: no-repeat, no-repeat;
   font-family: 'Plus Jakarta Sans', var(--font-body);
 }
 
@@ -978,6 +1021,7 @@ h3 {
 .wallet-connect-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   margin: 14px 0;
 }
