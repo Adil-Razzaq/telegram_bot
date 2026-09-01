@@ -6,6 +6,7 @@ import Friends from './components/Friends';
 import Wallet from './components/Wallet';
 import { api } from './api';
 import { enableInAppInterstitial } from './monetag';
+import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from './tonConnect';
 import './styles/app.css';
 
 export default function App() {
@@ -15,6 +16,15 @@ export default function App() {
   const [telegramId, setTelegramId] = useState(null);
   const [displayName, setDisplayName] = useState(null);
 
+  // Lifted here (rather than duplicated in Miner + Wallet separately) so
+  // both the Mine-tab header and the Profile page always agree on
+  // connection state — one TON Connect subscription, one source of
+  // truth. "Verified" on Profile and the wallet chip on Mine both read
+  // off this same connectedWallet value.
+  const [connectedWallet, setConnectedWallet] = useState(null);
+  const [walletConnecting, setWalletConnecting] = useState(false);
+  const [walletError, setWalletError] = useState(null);
+
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     tg?.ready();
@@ -22,32 +32,80 @@ export default function App() {
     const user = tg?.initDataUnsafe?.user;
     if (user) {
       setTelegramId(user.id);
-      // Full name as set on their actual Telegram account (first + last),
-      // not the @username — someone can go by a totally different
-      // username than their real display name, and this is meant to show
-      // the name they'd recognize themselves by, same as Telegram's own
-      // UI shows throughout the app.
       const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
       setDisplayName(fullName || user.username || 'Player');
     }
 
     api
       .getMe()
-      .then((me) => setMainBalance(me.main_balance ?? 0))
+      .then((me) => {
+        setMainBalance(me.main_balance ?? 0);
+        if (me.wallet_address) setConnectedWallet(me.wallet_address);
+      })
       .catch(() => {})
       .finally(() => setBalanceLoaded(true));
 
-    // Passive In-App Interstitial ads: first one 7s after open, then
-    // auto-repeats (including across tab switches within the app) per
-    // its own settings. Called once here, not per-tab/component.
+    // "Login with the same Tonkeeper": TON Connect restores a prior
+    // session automatically. If it restores an address and this account
+    // has none linked yet, link it here — this is what makes a
+    // returning user's Tonkeeper resolve straight back to their account.
+    initTonConnectAutoConnect()
+      .then(async (restoredAddress) => {
+        if (!restoredAddress) return;
+        const me = await api.getMe();
+        if (!me.wallet_address) {
+          const result = await api.connectWallet(restoredAddress);
+          setConnectedWallet(result.wallet_address);
+        }
+      })
+      .catch(() => {});
+
     enableInAppInterstitial();
   }, []);
+
+  async function handleConnectWallet() {
+    setWalletConnecting(true);
+    setWalletError(null);
+    try {
+      const walletAddress = await connectTonWallet();
+      const result = await api.connectWallet(walletAddress);
+      setConnectedWallet(result.wallet_address);
+    } catch (e) {
+      setWalletError(e.message);
+    } finally {
+      setWalletConnecting(false);
+    }
+  }
+
+  async function handleDisconnectWallet() {
+    setWalletError(null);
+    try {
+      await api.disconnectWallet();
+      await disconnectTonWallet();
+      setConnectedWallet(null);
+    } catch (e) {
+      setWalletError(e.message);
+    }
+  }
+
+  const walletProps = {
+    connectedWallet,
+    walletConnecting,
+    walletError,
+    onConnectWallet: handleConnectWallet,
+    onDisconnectWallet: handleDisconnectWallet,
+  };
 
   return (
     <div className="app">
       <main className="app-main">
         {tab === 'miner' && (
-          <Miner mainBalance={mainBalance} onBalanceChange={setMainBalance} />
+          <Miner
+            displayName={displayName}
+            mainBalance={mainBalance}
+            onBalanceChange={setMainBalance}
+            {...walletProps}
+          />
         )}
         {tab === 'tasks' && <Tasks onBalanceChange={setMainBalance} />}
         {tab === 'spin' && (
@@ -63,6 +121,7 @@ export default function App() {
             mainBalance={mainBalance}
             balanceLoaded={balanceLoaded}
             onBalanceChange={setMainBalance}
+            {...walletProps}
           />
         )}
       </main>

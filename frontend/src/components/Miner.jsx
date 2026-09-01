@@ -2,14 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
-// Redesigned from a passive always-on miner into: tap Start (watch a
-// Rewarded Popup ad) -> runs for a fixed cycle length -> stops on its
-// own -> tap Claim (this is the ONLY moment a toast notification
-// appears, per spec) -> tap Start again for the next cycle, up to a
-// daily cap. Every number (cycle length, cycles/day, daily points, $
-// value) comes from the backend's /user/config + /miner/status, not
-// hardcoded — an admin can change all of it live via Settings.
-
 function formatDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -17,23 +9,45 @@ function formatDuration(totalSeconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function Miner({ onBalanceChange }) {
+function shortAddress(addr) {
+  if (!addr) return '';
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
+export default function Miner({
+  displayName,
+  mainBalance,
+  onBalanceChange,
+  connectedWallet,
+  walletConnecting,
+  onConnectWallet,
+  onDisconnectWallet,
+}) {
   const [status, setStatus] = useState(null);
   const [config, setConfig] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  // Live-ticking accrued amount — synced from the server on each poll,
+  // then animated locally between polls using rate_per_second so it
+  // reads as continuously moving (matching the mockup's pulsing
+  // "+70.0379") without hitting the server every frame.
+  const [liveAccrued, setLiveAccrued] = useState(0);
   const [starting, setStarting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
+
   const tickRef = useRef(null);
   const pollRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const syncRef = useRef({ accrued: 0, rate: 0, syncedAt: 0 });
 
   async function refreshStatus() {
     try {
       const s = await api.minerStatus();
       setStatus(s);
       setSecondsLeft(s.seconds_remaining_in_cycle);
+      setLiveAccrued(s.accrued_now);
+      syncRef.current = { accrued: s.accrued_now, rate: s.rate_per_second, syncedAt: Date.now() };
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -50,7 +64,12 @@ export default function Miner({ onBalanceChange }) {
   useEffect(() => {
     tickRef.current = setInterval(() => {
       setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
-    }, 1000);
+      const { accrued, rate, syncedAt } = syncRef.current;
+      if (rate > 0) {
+        const elapsedSinceSync = (Date.now() - syncedAt) / 1000;
+        setLiveAccrued(accrued + rate * elapsedSinceSync);
+      }
+    }, 150); // smooth-ish ticking without being wasteful
     return () => clearInterval(tickRef.current);
   }, []);
 
@@ -70,6 +89,8 @@ export default function Miner({ onBalanceChange }) {
       const result = await withConfirmationRetry(() => api.startMiner(nonce));
       setStatus(result);
       setSecondsLeft(result.seconds_remaining_in_cycle);
+      setLiveAccrued(result.accrued_now);
+      syncRef.current = { accrued: result.accrued_now, rate: result.rate_per_second, syncedAt: Date.now() };
     } catch (e) {
       setError(e.message);
     } finally {
@@ -77,14 +98,20 @@ export default function Miner({ onBalanceChange }) {
     }
   }
 
+  // Claim works ANY TIME while a cycle is running — pays out whatever's
+  // accrued so far (server recomputes it independently, never trusts
+  // the client's number) and ends that cycle. Ad-gated, same pattern as
+  // Start.
   async function handleClaim() {
     if (claiming) return;
     setClaiming(true);
     setError(null);
     try {
-      const result = await api.minerClaim();
+      const { nonce } = await api.prepareMinerClaim();
+      await showRewardedAd(nonce);
+      const result = await withConfirmationRetry(() => api.minerClaim(nonce));
       onBalanceChange(result.main_balance);
-      showToast(result.earned_points); // ONLY place in the app a claim toast fires
+      showToast(result.earned_points);
       await refreshStatus();
     } catch (e) {
       setError(e.message);
@@ -98,7 +125,12 @@ export default function Miner({ onBalanceChange }) {
   }
 
   const pointsPerUsd = config?.points_per_usd || 10000;
-  const cycleFinished = status.status === 'running' && secondsLeft <= 0;
+  const holding = mainBalance;
+  const pool = liveAccrued;
+  const assets = holding + pool;
+  const isRunning = status.status === 'running';
+  const canRestart = status.status === 'idle' && status.cycles_remaining_today > 0;
+  const outOfCycles = status.status === 'idle' && status.cycles_remaining_today === 0;
 
   return (
     <div className="miner-container">
@@ -114,18 +146,44 @@ export default function Miner({ onBalanceChange }) {
         </div>
       )}
 
-      <div className="miner-stats-row">
-        <div className="miner-stat-pill">
-          <span className="miner-stat-label">Daily total</span>
-          <span className="miner-stat-value num">{status.daily_points} ADLX</span>
-        </div>
-        <div className="miner-stat-pill">
-          <span className="miner-stat-label">Cycles left today</span>
-          <span className="miner-stat-value num">
-            {status.cycles_remaining_today} / {status.cycles_per_day}
-          </span>
+      {/* Mine-tab-only header: real name left, wallet status right.
+          "Verified" elsewhere in the app (Profile) is derived from this
+          same connectedWallet value — one wallet, one source of truth. */}
+      <div className="miner-header">
+        <span className="miner-header-name">{displayName || 'Player'}</span>
+        {connectedWallet ? (
+          <span className="miner-header-wallet connected">🔗 {shortAddress(connectedWallet)}</span>
+        ) : (
+          <button
+            className="miner-header-wallet connect"
+            onClick={onConnectWallet}
+            disabled={walletConnecting}
+          >
+            {walletConnecting ? 'Connecting…' : 'Connect Wallet'}
+          </button>
+        )}
+      </div>
+
+      <div className="miner-assets">
+        <p className="miner-assets-label">Assets</p>
+        <h1 className="miner-assets-value num">
+          {assets.toFixed(4)} <span className="miner-assets-unit">ADLX</span>
+        </h1>
+        <div className="miner-wallet-pills">
+          <div className="miner-wallet-pill">
+            <span>Holding Wallet:</span>
+            <strong className="num">{holding.toFixed(3)} ADLX</strong>
+          </div>
+          <div className="miner-wallet-pill pool">
+            <span>Pool Wallet:</span>
+            <strong className="num">{pool.toFixed(4)} ADLX</strong>
+          </div>
         </div>
       </div>
+
+      {isRunning && (
+        <div className="miner-live-rate num">+{liveAccrued.toFixed(4)}</div>
+      )}
 
       <div className="miner-coin-wrap">
         <div className="miner-coin-glow" />
@@ -137,38 +195,33 @@ export default function Miner({ onBalanceChange }) {
         </div>
       </div>
 
-      {status.status === 'idle' && status.cycles_remaining_today > 0 && (
-        <>
-          <p className="miner-copy">
-            Watch a short ad to start a {status.cycle_hours}h mining cycle worth ~
-            {status.next_cycle_points} points (${(status.next_cycle_points / pointsPerUsd).toFixed(4)}).
-          </p>
-          <button className="miner-claim-button" onClick={handleStart} disabled={starting}>
-            {starting ? 'Loading…' : 'Watch ad & Start mining'}
-          </button>
-        </>
+      {isRunning && (
+        <p className="miner-copy">
+          {formatDuration(secondsLeft)} left in this cycle — claim anytime for what's accrued so far,
+          or wait for it to finish.
+        </p>
       )}
-
-      {status.status === 'running' && !cycleFinished && (
-        <>
-          <div className="miner-live-ticker num">{formatDuration(secondsLeft)}</div>
-          <p className="miner-copy">Mining in progress — come back when the timer finishes.</p>
-        </>
+      {canRestart && (
+        <p className="miner-copy">
+          Watch a short ad to start a {status.cycle_hours}h cycle worth ~{status.next_cycle_points} ADLX.
+          {' '}({status.cycles_remaining_today} of {status.cycles_per_day} cycles left today)
+        </p>
       )}
-
-      {cycleFinished && (
-        <>
-          <p className="miner-copy">Cycle finished! Claim your points.</p>
-          <button className="miner-claim-button" onClick={handleClaim} disabled={claiming}>
-            {claiming ? 'Claiming…' : 'Claim'}
-          </button>
-        </>
-      )}
-
-      {status.status === 'idle' && status.cycles_remaining_today === 0 && (
+      {outOfCycles && (
         <p className="miner-copy">
           You've used all {status.cycles_per_day} mining cycles today — come back tomorrow.
         </p>
+      )}
+
+      {isRunning && (
+        <button className="miner-claim-button" onClick={handleClaim} disabled={claiming}>
+          {claiming ? 'Claiming…' : 'Watch ad & Claim'}
+        </button>
+      )}
+      {canRestart && (
+        <button className="miner-claim-button" onClick={handleStart} disabled={starting}>
+          {starting ? 'Loading…' : status.cycles_completed_today > 0 ? 'Restart Cycle' : 'Start Mining'}
+        </button>
       )}
 
       {error && <p className="miner-error">{error}</p>}

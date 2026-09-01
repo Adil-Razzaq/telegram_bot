@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from '../tonConnect';
 
 const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
 const MIN_WITHDRAWAL_POINTS = 500;
@@ -10,20 +9,23 @@ function shortAddress(addr) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
-  const [connectedWallet, setConnectedWallet] = useState(null);
-  const [connecting, setConnecting] = useState(false);
-  const [walletError, setWalletError] = useState(null);
+export default function Wallet({
+  telegramId,
+  mainBalance,
+  onBalanceChange,
+  connectedWallet,
+  walletConnecting,
+  walletError,
+  onConnectWallet,
+  onDisconnectWallet,
+}) {
   const [config, setConfig] = useState(null);
 
-  // The mockup's Withdraw/History cards are triggers, not permanently
-  // visible forms — this is the real functionality from before, now
-  // tucked behind the same card-tap pattern instead of always showing.
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('soundOn') !== 'false');
 
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState(connectedWallet || '');
   const [points, setPoints] = useState('');
   const [history, setHistory] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -41,38 +43,16 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     }
   }
 
-  async function loadWalletStatus() {
-    try {
-      const me = await api.getMe();
-      if (me.wallet_address) {
-        setConnectedWallet(me.wallet_address);
-        setAddress(me.wallet_address);
-      }
-    } catch (e) {
-      // non-fatal — the rest of the page still works without this
-    }
-  }
-
-  async function tryAutoConnect() {
-    try {
-      const restoredAddress = await initTonConnectAutoConnect();
-      if (!restoredAddress) return;
-      const me = await api.getMe();
-      if (!me.wallet_address) {
-        const result = await api.connectWallet(restoredAddress);
-        setConnectedWallet(result.wallet_address);
-        setAddress(result.wallet_address);
-      }
-    } catch (e) {
-      // silent — user can still tap Connect manually
-    }
-  }
-
   useEffect(() => {
-    loadWalletStatus();
-    tryAutoConnect();
     api.getConfig().then(setConfig).catch(() => {});
   }, []);
+
+  // Keep the withdrawal address field pre-filled with whatever's
+  // connected — connecting/disconnecting on the Mine-tab header (shared
+  // state, see App.jsx) is reflected here automatically.
+  useEffect(() => {
+    if (connectedWallet) setAddress(connectedWallet);
+  }, [connectedWallet]);
 
   useEffect(() => {
     if (!historyLoaded) return;
@@ -81,32 +61,6 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     const interval = setInterval(loadHistory, 15000);
     return () => clearInterval(interval);
   }, [history, historyLoaded]);
-
-  async function handleConnect() {
-    setConnecting(true);
-    setWalletError(null);
-    try {
-      const walletAddress = await connectTonWallet();
-      const result = await api.connectWallet(walletAddress);
-      setConnectedWallet(result.wallet_address);
-      setAddress(result.wallet_address);
-    } catch (e) {
-      setWalletError(e.message);
-    } finally {
-      setConnecting(false);
-    }
-  }
-
-  async function handleDisconnect() {
-    setWalletError(null);
-    try {
-      await api.disconnectWallet();
-      await disconnectTonWallet();
-      setConnectedWallet(null);
-    } catch (e) {
-      setWalletError(e.message);
-    }
-  }
 
   function toggleSound() {
     setSoundOn((prev) => {
@@ -161,24 +115,32 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         </div>
       )}
 
-      {/* Inert — no verification system exists yet. Shown for the visual,
-          does nothing when tapped. Ask if you want this to be real. */}
+      {/* Real now: "verified" = has a TON wallet connected (same
+          connectedWallet used for the Mine-tab header and withdrawals —
+          one source of truth, see App.jsx). Tapping Verify just runs the
+          same connect flow as everywhere else in the app. */}
       <div className="glass-card">
-        <span className="glass-card-icon round" style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
-          ✅
+        <span
+          className="glass-card-icon round"
+          style={
+            connectedWallet
+              ? { background: 'rgba(74,222,128,0.12)', color: '#4ade80' }
+              : { background: 'rgba(255,255,255,0.06)', color: 'var(--muted)' }
+          }
+        >
+          {connectedWallet ? '✅' : '⬜'}
         </span>
         <div className="glass-card-body">
           <p className="glass-card-title">Account Verification</p>
-          <p className="glass-card-subtitle">Unverified</p>
+          <p className="glass-card-subtitle">{connectedWallet ? 'Verified' : 'Unverified'}</p>
         </div>
-        <button className="gold-button" disabled title="Not implemented yet">
-          Verify
-        </button>
+        {!connectedWallet && (
+          <button className="gold-button" onClick={onConnectWallet} disabled={walletConnecting}>
+            {walletConnecting ? '…' : 'Verify'}
+          </button>
+        )}
       </div>
 
-      {/* Inert visually, but the toggle itself is real (persisted to
-          localStorage) — there's just no actual sound system in the app
-          yet for it to control. */}
       <div className="glass-card" onClick={toggleSound} style={{ cursor: 'pointer' }}>
         <span className="glass-card-icon round">{soundOn ? '🔊' : '🔇'}</span>
         <div className="glass-card-body">
@@ -198,8 +160,6 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         <span className="value-chip">≈ ${(mainBalance / pointsPerUsd).toFixed(2)}</span>
       </div>
 
-      {/* This is your one real balance, shown once — see the note in
-          chat about why "Holding Wallet" isn't a separate card here. */}
       <div className="glass-card">
         <span className="glass-card-icon round" style={{ background: 'rgba(147,197,253,0.12)', color: '#93c5fd' }}>
           🏦
@@ -219,13 +179,13 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         {connectedWallet ? (
           <>
             <span className="wallet-connected-chip">🔗 {shortAddress(connectedWallet)}</span>
-            <button type="button" className="ghost-pill" onClick={handleDisconnect}>
+            <button type="button" className="ghost-pill" onClick={onDisconnectWallet}>
               Disconnect
             </button>
           </>
         ) : (
-          <button type="button" className="gold-button" onClick={handleConnect} disabled={connecting}>
-            {connecting ? 'Connecting…' : '🔗 Connect Tonkeeper'}
+          <button type="button" className="gold-button" onClick={onConnectWallet} disabled={walletConnecting}>
+            {walletConnecting ? 'Connecting…' : '🔗 Connect Tonkeeper'}
           </button>
         )}
       </div>
