@@ -16,9 +16,17 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
   const [walletError, setWalletError] = useState(null);
   const [config, setConfig] = useState(null);
 
+  // The mockup's Withdraw/History cards are triggers, not permanently
+  // visible forms — this is the real functionality from before, now
+  // tucked behind the same card-tap pattern instead of always showing.
+  const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem('soundOn') !== 'false');
+
   const [address, setAddress] = useState('');
   const [points, setPoints] = useState('');
   const [history, setHistory] = useState([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -27,6 +35,7 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     try {
       const res = await api.withdrawalHistory();
       setHistory(res.withdrawals);
+      setHistoryLoaded(true);
     } catch (e) {
       setError(e.message);
     }
@@ -40,18 +49,10 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         setAddress(me.wallet_address);
       }
     } catch (e) {
-      // non-fatal — the rest of the wallet page still works without this
+      // non-fatal — the rest of the page still works without this
     }
   }
 
-  // "Login with the same Tonkeeper" in practice: TON Connect restores a
-  // previous session automatically on load. If it restores an address,
-  // AND this account has no wallet linked yet, we link it here — this is
-  // what makes a returning user with the same Tonkeeper resolve straight
-  // back to this account, no manual re-connect needed. If a DIFFERENT
-  // wallet auto-restores than what's linked, we deliberately don't
-  // silently switch anything — connectWallet's own conflict handling
-  // covers that safely (see walletService.js).
   async function tryAutoConnect() {
     try {
       const restoredAddress = await initTonConnectAutoConnect();
@@ -63,24 +64,23 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
         setAddress(result.wallet_address);
       }
     } catch (e) {
-      // Auto-connect failing silently is correct here — the user can
-      // still tap Connect manually, this just skips the convenience path.
+      // silent — user can still tap Connect manually
     }
   }
 
   useEffect(() => {
-    loadHistory();
     loadWalletStatus();
     tryAutoConnect();
     api.getConfig().then(setConfig).catch(() => {});
   }, []);
 
   useEffect(() => {
+    if (!historyLoaded) return;
     const hasPending = history.some((w) => w.status === 'PENDING');
     if (!hasPending) return;
     const interval = setInterval(loadHistory, 15000);
     return () => clearInterval(interval);
-  }, [history]);
+  }, [history, historyLoaded]);
 
   async function handleConnect() {
     setConnecting(true);
@@ -106,6 +106,19 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
     } catch (e) {
       setWalletError(e.message);
     }
+  }
+
+  function toggleSound() {
+    setSoundOn((prev) => {
+      const next = !prev;
+      localStorage.setItem('soundOn', String(next));
+      return next;
+    });
+  }
+
+  function toggleHistory() {
+    setShowHistory((v) => !v);
+    if (!historyLoaded) loadHistory();
   }
 
   const pointsPerUsd = config?.points_per_usd || 10000;
@@ -136,102 +149,178 @@ export default function Wallet({ telegramId, mainBalance, onBalanceChange }) {
 
   return (
     <div className="wallet">
-      <h2>Profile</h2>
+      <h2 className="page-title">Profile</h2>
+
       {telegramId && (
-        <div className="friends-card">
-          <span className="friends-card-icon">👤</span>
-          <div className="friends-card-info">
-            <span className="friends-card-label">User ID</span>
-            <span className="friends-card-value profile-user-id">{telegramId}</span>
+        <div className="glass-card">
+          <span className="glass-card-icon round">👤</span>
+          <div className="glass-card-body">
+            <p className="glass-card-title">User ID</p>
+            <p className="glass-card-subtitle num">{telegramId}</p>
           </div>
         </div>
       )}
-      <p className="wallet-balance">
-        Balance: <strong>{mainBalance}</strong> ADLX (${(mainBalance / pointsPerUsd).toFixed(2)})
-      </p>
+
+      {/* Inert — no verification system exists yet. Shown for the visual,
+          does nothing when tapped. Ask if you want this to be real. */}
+      <div className="glass-card">
+        <span className="glass-card-icon round" style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>
+          ✅
+        </span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Account Verification</p>
+          <p className="glass-card-subtitle">Unverified</p>
+        </div>
+        <button className="gold-button" disabled title="Not implemented yet">
+          Verify
+        </button>
+      </div>
+
+      {/* Inert visually, but the toggle itself is real (persisted to
+          localStorage) — there's just no actual sound system in the app
+          yet for it to control. */}
+      <div className="glass-card" onClick={toggleSound} style={{ cursor: 'pointer' }}>
+        <span className="glass-card-icon round">{soundOn ? '🔊' : '🔇'}</span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Sound effects</p>
+          <p className="glass-card-subtitle">{soundOn ? 'On — tap to mute' : 'Muted — tap to unmute'}</p>
+        </div>
+      </div>
+
+      <div className="glass-card">
+        <span className="glass-card-icon round" style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15' }}>
+          💰
+        </span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Assets</p>
+          <p className="glass-card-subtitle num">{mainBalance.toLocaleString()} ADLX</p>
+        </div>
+        <span className="value-chip">≈ ${(mainBalance / pointsPerUsd).toFixed(2)}</span>
+      </div>
+
+      {/* This is your one real balance, shown once — see the note in
+          chat about why "Holding Wallet" isn't a separate card here. */}
+      <div className="glass-card">
+        <span className="glass-card-icon round" style={{ background: 'rgba(147,197,253,0.12)', color: '#93c5fd' }}>
+          🏦
+        </span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Wallet</p>
+          <p className="glass-card-subtitle">Withdrawable balance</p>
+        </div>
+        <span className="glass-card-value" style={{ color: 'var(--accent)' }}>
+          {mainBalance.toLocaleString()} ADLX
+        </span>
+      </div>
+
+      <h3 style={{ textAlign: 'center' }}>Controls</h3>
 
       <div className="wallet-connect-row">
         {connectedWallet ? (
           <>
             <span className="wallet-connected-chip">🔗 {shortAddress(connectedWallet)}</span>
-            <button type="button" className="wallet-disconnect-button" onClick={handleDisconnect}>
+            <button type="button" className="ghost-pill" onClick={handleDisconnect}>
               Disconnect
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            className="wallet-connect-button"
-            onClick={handleConnect}
-            disabled={connecting}
-          >
+          <button type="button" className="gold-button" onClick={handleConnect} disabled={connecting}>
             {connecting ? 'Connecting…' : '🔗 Connect Tonkeeper'}
           </button>
         )}
       </div>
       {walletError && <p className="wallet-error">{walletError}</p>}
 
-      <form onSubmit={handleSubmit} className="wallet-form">
-        <label>
-          TON wallet address
-          <input
-            value={address}
-            onChange={(e) => setAddress(e.target.value.trim())}
-            placeholder="EQ... or UQ..."
-          />
-          {address && !addressValid && <span className="field-error">Invalid TON address</span>}
-        </label>
-
-        <label>
-          ADLX to withdraw (min {MIN_WITHDRAWAL_POINTS})
-          <input
-            type="number"
-            value={points}
-            onChange={(e) => setPoints(e.target.value)}
-            min={MIN_WITHDRAWAL_POINTS}
-            max={mainBalance}
-          />
-          {points && !amountValid && (
-            <span className="field-error">
-              Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
-            </span>
-          )}
-        </label>
-
-        <button type="submit" disabled={!canSubmit}>
-          {submitting ? 'Submitting…' : 'Request withdrawal'}
+      <div className="glass-card" style={{ marginTop: 12 }}>
+        <span className="glass-card-icon round">📤</span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Withdraw</p>
+          <p className="glass-card-subtitle">Transfer balance to your wallet</p>
+        </div>
+        <button className="gold-button" onClick={() => setShowWithdrawForm((v) => !v)}>
+          Withdraw
         </button>
-      </form>
+      </div>
+
+      {showWithdrawForm && (
+        <form onSubmit={handleSubmit} className="wallet-form">
+          <label>
+            TON wallet address
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value.trim())}
+              placeholder="EQ... or UQ..."
+            />
+            {address && !addressValid && <span className="field-error">Invalid TON address</span>}
+          </label>
+
+          <label>
+            ADLX to withdraw (min {MIN_WITHDRAWAL_POINTS})
+            <input
+              type="number"
+              value={points}
+              onChange={(e) => setPoints(e.target.value)}
+              min={MIN_WITHDRAWAL_POINTS}
+              max={mainBalance}
+            />
+            {points && !amountValid && (
+              <span className="field-error">
+                Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
+              </span>
+            )}
+          </label>
+
+          <button type="submit" disabled={!canSubmit}>
+            {submitting ? 'Submitting…' : 'Request withdrawal'}
+          </button>
+        </form>
+      )}
 
       {successMsg && <p className="wallet-success">{successMsg}</p>}
       {error && <p className="wallet-error">{error}</p>}
 
-      <h3>History</h3>
-      {history.length === 0 ? (
-        <p className="wallet-empty">No withdrawals yet.</p>
-      ) : (
-        <ul className="wallet-history">
-          {history.map((w) => (
-            <li key={w.id} className={`wallet-history-item status-${w.status.toLowerCase()}`}>
-              <div>
-                <strong>${w.amount_usd.toFixed(2)}</strong> ({w.points_deducted} ADLX)
-                <span className={`status-badge status-${w.status.toLowerCase()}`}>{w.status}</span>
-              </div>
-              <div className="wallet-history-meta">
-                {new Date(w.created_at).toLocaleString()}
-                {w.tx_hash && (
-                  <a
-                    href={`https://tonviewer.com/transaction/${w.tx_hash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View on Tonviewer
-                  </a>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+      <div className="glass-card">
+        <span className="glass-card-icon round">🧾</span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">History</p>
+          <p className="glass-card-subtitle">Your withdrawals</p>
+        </div>
+        <button className="gold-button" onClick={toggleHistory}>
+          {showHistory ? 'Close' : 'Open'}
+        </button>
+      </div>
+
+      {showHistory && (
+        <>
+          {!historyLoaded ? (
+            <p className="wallet-empty">Loading…</p>
+          ) : history.length === 0 ? (
+            <p className="wallet-empty">No withdrawals yet.</p>
+          ) : (
+            <ul className="wallet-history">
+              {history.map((w) => (
+                <li key={w.id} className={`wallet-history-item status-${w.status.toLowerCase()}`}>
+                  <div>
+                    <strong>${w.amount_usd.toFixed(2)}</strong> ({w.points_deducted} ADLX)
+                    <span className={`status-badge status-${w.status.toLowerCase()}`}>{w.status}</span>
+                  </div>
+                  <div className="wallet-history-meta">
+                    {new Date(w.created_at).toLocaleString()}
+                    {w.tx_hash && (
+                      <a
+                        href={`https://tonviewer.com/transaction/${w.tx_hash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View on Tonviewer
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   );

@@ -12,6 +12,15 @@
   --danger: #f0594f;
   --danger-soft: #3a2020;
 
+  /* Gold — used specifically for reward/claim CTAs and active nav state,
+     matching the Friends/Profile mockups exactly (they use gold there,
+     not the green from the Miner page — green stays the "brand/mining"
+     color, gold stays the "reward/money" color, used consistently on
+     that basis rather than mixed arbitrarily). */
+  --gold: #d69e2e;
+  --gold-light: #ffeaa7;
+  --gold-glow: rgba(214, 158, 46, 0.4);
+
   --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
@@ -62,8 +71,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
    translucent --surface/--surface-2 tokens gets the blur automatically,
    which is what actually makes the transparency read as "frosted glass"
    instead of just "dim". */
-.task-card, .friends-card, .miner-stat-pill, .balance-pill, .app-tabs,
-.wallet-form, .referral-stats > div, .wallet-connect-button,
+.task-card, .glass-card, .app-tabs,
+.wallet-form, .wallet-connect-button,
 .wallet-connected-chip, .withdrawal-item, .task-button {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -99,88 +108,50 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   z-index: 1;
 }
 
-/* ---------- Header ---------- */
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 18px 12px;
-}
-
-.user-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.user-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #b5772a);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 13px;
-  color: #10131a;
-  flex-shrink: 0;
-}
-
-.user-name {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.balance-pill {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
 /* ---------- Main / Tabs ---------- */
 .app-main {
   flex: 1;
   padding: 4px 18px 20px;
 }
 
+/* Bottom nav — matches the Friends/Profile mockups: dark blurred bar,
+   inactive icons muted grey, active tab in gold with a soft glow behind
+   the icon rather than a plain color change. */
 .app-tabs {
   display: flex;
+  justify-content: space-around;
+  align-items: center;
   border-top: 1px solid var(--border);
-  background: var(--bg);
+  background: rgba(13, 20, 30, 0.9);
   position: sticky;
   bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom, 8px);
 }
 
 .app-tabs button {
   flex: 1;
-  padding: 14px 8px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px 12px;
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  border-top: 2px solid transparent;
-  margin-top: -1px;
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, transform 0.15s ease;
 }
 
 .app-tabs button.active {
-  color: var(--accent);
-  border-top-color: var(--accent);
+  color: var(--gold-light);
+  filter: drop-shadow(0 0 8px var(--gold-glow));
+}
+
+.app-tabs button:active {
+  transform: scale(0.94);
 }
 
 h2 {
@@ -200,18 +171,167 @@ h3 {
   margin: 24px 0 10px;
 }
 
+/* ---------- Shared page primitives (Friends / Profile / Spin) ---------- */
+
+.page-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  text-align: center;
+  margin: 8px 0 4px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.page-subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13.5px;
+  margin: 0 0 20px;
+}
+
+/* The one card shape used everywhere on Friends/Profile: icon chip +
+   label/value + optional trailing action. Deliberately generic (not
+   friends- or wallet- prefixed) so both pages, and anything added later,
+   share the exact same visual language instead of near-duplicate CSS. */
+.glass-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.glass-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+}
+.glass-card-icon.round { border-radius: 50%; }
+
+.glass-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.glass-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  margin: 0 0 2px;
+}
+
+.glass-card-subtitle {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.glass-card-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Gold pill button — the primary reward/action CTA across Friends and
+   Profile (Copy, Claim, Verify, Withdraw, Open, etc.) */
+.gold-button {
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  color: #1a1300;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px var(--gold-glow);
+  transition: transform 0.12s ease, opacity 0.15s ease;
+}
+.gold-button:active:not(:disabled) { transform: scale(0.96); }
+.gold-button:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.ghost-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.value-chip {
+  background: rgba(0, 227, 139, 0.12);
+  border: 1px solid rgba(0, 227, 139, 0.35);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.coming-soon-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
 /* ---------- Spin wheel ---------- */
 .spin-wheel-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
-  padding-top: 20px;
+  gap: 18px;
+  padding-top: 4px;
+}
+
+.spin-wheel-frame {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 40px rgba(214, 158, 46, 0.08);
+  padding: 24px;
+  display: flex;
+  justify-content: center;
 }
 
 .spin-wheel-wrap {
   position: relative;
-  width: min(88vw, 300px);
+  width: min(80vw, 280px);
   aspect-ratio: 1;
 }
 
@@ -222,8 +342,8 @@ h3 {
 }
 
 .spin-wheel-hub {
-  fill: var(--surface);
-  stroke: var(--accent);
+  fill: var(--surface-2);
+  stroke: var(--gold);
   stroke-width: 2;
 }
 
@@ -236,29 +356,17 @@ h3 {
   height: 0;
   border-left: 11px solid transparent;
   border-right: 11px solid transparent;
-  border-top: 16px solid var(--accent);
+  border-top: 16px solid var(--gold);
   z-index: 2;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 6px var(--gold-glow));
 }
 
 .spin-button {
-  background: var(--accent);
-  color: #16130a;
-  border: none;
-  padding: 15px 22px;
-  border-radius: var(--radius);
-  font-size: 15px;
-  font-weight: 600;
   width: 100%;
   max-width: 320px;
-  transition: transform 0.1s ease, opacity 0.15s ease;
-}
-
-.spin-button:active:not(:disabled) { transform: scale(0.98); }
-
-.spin-button:disabled {
-  background: var(--surface-2);
-  color: var(--muted);
+  padding: 15px 22px;
+  font-size: 15px;
+  text-transform: none;
 }
 
 .spin-result {
@@ -475,6 +583,8 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .miner-stat-label {
@@ -829,82 +939,62 @@ h3 {
 }
 
 /* ---------- Friends ---------- */
-.friends-container { padding-top: 8px; }
+.friends-container { padding-top: 4px; }
 
-.friends-subtitle {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 0 0 16px;
+.friends-error { color: var(--danger); font-size: 13px; margin: 4px 0 10px; }
+
+.friends-invited-card {
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 6px;
 }
 
-.friends-card {
+.friends-invited-header { text-align: center; margin-bottom: 4px; }
+
+.friends-invited-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.friends-invited-list li {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 10px;
+  gap: 10px;
 }
 
-.friends-card-icon {
-  font-size: 20px;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
+.friends-invited-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  color: #1a1300;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-2);
-  border-radius: 10px;
+  flex-shrink: 0;
 }
 
-.friends-card-info {
+.friends-invited-name {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.friends-card-label {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--text);
-}
-
-.friends-card-value {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-.friends-link-text {
-  font-family: var(--font-mono);
-  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.friends-action-button {
-  background: var(--accent);
-  color: #16130a;
-  border: none;
-  padding: 9px 18px;
-  border-radius: 999px;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
+.friends-invited-time {
+  font-size: 12px;
+  color: var(--muted);
   flex-shrink: 0;
 }
-
-.friends-action-button:disabled {
-  background: var(--surface-2);
-  color: var(--muted);
-}
-
-.friends-error { color: var(--danger); font-size: 13px; }
 
 /* ---------- Profile (renamed Wallet) ---------- */
 .profile-user-id {

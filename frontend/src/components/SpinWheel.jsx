@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { showRewardedAd, withConfirmationRetry } from '../monetag';
 
-// Order/colors must match backend SEGMENTS in services/spinService.js
+// Order/colors must match backend SEGMENTS in services/spinService.js —
+// palette shifted to the app's gold/emerald theme (was blue/gold).
 const SEGMENTS = [
-  { index: 1, label: '10', color: '#1b2130' },
-  { index: 2, label: '20', color: '#2a3550' },
-  { index: 3, label: '50', color: '#3a4a70' },
+  { index: 1, label: '10', color: '#0d2a20' },
+  { index: 2, label: '20', color: '#0f3b2c' },
+  { index: 3, label: '50', color: '#124d38' },
   { index: 4, label: '100', color: '#8a6a2a' },
   { index: 5, label: '200', color: '#b5822e' },
-  { index: 6, label: '500', color: '#e8a33d' },
+  { index: 6, label: '500', color: '#d69e2e' },
 ];
 const SEGMENT_ANGLE = 360 / SEGMENTS.length;
 const SIZE = 300;
@@ -84,39 +85,44 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
 
   return (
     <div className="spin-wheel-container">
-      <div className="spin-wheel-wrap">
-        <div className="spin-wheel-pointer" />
-        <svg
-          className="spin-wheel-svg"
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          style={{
-            transform: `rotate(${rotation}deg)`,
-            transition: spinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.3, 1)' : 'none',
-          }}
-        >
-          {wedges.map((w) => (
-            <g key={w.index}>
-              <path d={w.path} fill={w.color} stroke="#0b0e14" strokeWidth="2" />
-              <text
-                x={w.labelPos.x}
-                y={w.labelPos.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                transform={`rotate(${w.mid}, ${w.labelPos.x}, ${w.labelPos.y})`}
-                fontFamily="'JetBrains Mono', monospace"
-                fontWeight="600"
-                fontSize={w.label.length > 2 ? 22 : 26}
-                fill={w.index >= 5 ? '#16130a' : '#edeff3'}
-              >
-                {w.label}
-              </text>
-            </g>
-          ))}
-          <circle cx={CENTER} cy={CENTER} r={22} className="spin-wheel-hub" />
-        </svg>
+      <h2 className="page-title">Spin</h2>
+      <p className="page-subtitle">Watch a short ad, spin the wheel, win ADLX</p>
+
+      <div className="spin-wheel-frame">
+        <div className="spin-wheel-wrap">
+          <div className="spin-wheel-pointer" />
+          <svg
+            className="spin-wheel-svg"
+            viewBox={`0 0 ${SIZE} ${SIZE}`}
+            style={{
+              transform: `rotate(${rotation}deg)`,
+              transition: spinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.3, 1)' : 'none',
+            }}
+          >
+            {wedges.map((w) => (
+              <g key={w.index}>
+                <path d={w.path} fill={w.color} stroke="#051424" strokeWidth="2" />
+                <text
+                  x={w.labelPos.x}
+                  y={w.labelPos.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  transform={`rotate(${w.mid}, ${w.labelPos.x}, ${w.labelPos.y})`}
+                  fontFamily="'JetBrains Mono', monospace"
+                  fontWeight="600"
+                  fontSize={w.label.length > 2 ? 22 : 26}
+                  fill={w.index >= 4 ? '#1a1300' : '#d4e4fa'}
+                >
+                  {w.label}
+                </text>
+              </g>
+            ))}
+            <circle cx={CENTER} cy={CENTER} r={22} className="spin-wheel-hub" />
+          </svg>
+        </div>
       </div>
 
-      <button className="spin-button" onClick={handleSpin} disabled={spinning || !canAfford}>
+      <button className="gold-button spin-button" onClick={handleSpin} disabled={spinning || !canAfford}>
         {spinning ? 'Spinning…' : canAfford ? 'Watch ad & Spin (100 ADLX)' : 'Not enough ADLX'}
       </button>
 

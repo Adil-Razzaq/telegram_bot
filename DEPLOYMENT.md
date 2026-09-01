@@ -82,9 +82,15 @@ move to Render's paid tier or another always-on host.
    - **Root Directory:** `frontend`
    - **Framework Preset:** Vite (Vercel usually detects this automatically)
 4. Under **Environment Variables**, add:
-   - `VITE_API_BASE` = `https://your-app.onrender.com/api` (your Render
-     URL from step 4, with `/api` on the end)
-   - `VITE_ADSGRAM_BLOCK_ID` = your Adsgram block ID once you have one
+   - `VITE_API_BASE` = `https://your-backend-url/api` (with `/api` on the end)
+   - `VITE_BOT_USERNAME` = your bot's username, **without** the @ (e.g.
+     `BNBXpert_bot`) — this is what `Friends.jsx` uses to build each
+     user's `https://t.me/YourBot?start=ref_123` invite link. **Without
+     this set, no referral link is ever generated at all** — the Friends
+     tab just shows a "Set VITE_BOT_USERNAME" placeholder instead of a
+     link, and nobody can be referred, no matter how correct the backend
+     logic is.
+   - `VITE_MONETAG_ZONE_ID` = your Monetag zone ID (see step 7)
 5. Click **Deploy**. You'll get a URL like `https://your-app.vercel.app`.
 
 ## 6. Point the bot at your frontend

@@ -43,18 +43,8 @@ export default function App() {
     enableInAppInterstitial();
   }, []);
 
-  const initial = (displayName || 'P')[0]?.toUpperCase() || 'P';
-
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="user-chip">
-          <span className="user-avatar">{initial}</span>
-          <span className="user-name">{displayName || 'Player'}</span>
-        </div>
-        <span className="balance-pill num">{balanceLoaded ? `${mainBalance} ADLX` : '…'}</span>
-      </header>
-
       <main className="app-main">
         {tab === 'miner' && (
           <Miner mainBalance={mainBalance} onBalanceChange={setMainBalance} />
@@ -67,7 +57,13 @@ export default function App() {
           <Friends telegramId={telegramId} onBalanceChange={setMainBalance} />
         )}
         {tab === 'profile' && (
-          <Wallet telegramId={telegramId} mainBalance={mainBalance} onBalanceChange={setMainBalance} />
+          <Wallet
+            telegramId={telegramId}
+            displayName={displayName}
+            mainBalance={mainBalance}
+            balanceLoaded={balanceLoaded}
+            onBalanceChange={setMainBalance}
+          />
         )}
       </main>
 

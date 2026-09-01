@@ -1,7 +1,8 @@
 const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
-const { prepareClaim, claimReferral, REFERRAL_BASE_REWARD } = require('../services/referralService');
+const { prepareClaim, claimReferral } = require('../services/referralService');
 const { client } = require('../db/db');
+const { getSetting } = require('../utils/settings');
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ router.post('/claim', telegramAuth, async (req, res) => {
 // sends /start — nothing needs to call this from the frontend.
 router.get('/status', telegramAuth, async (req, res) => {
   const telegramId = req.telegramUser.id;
+  const referralReward = await getSetting('referral_reward');
   try {
     const [userRes, totalRes, successfulRes] = await Promise.all([
       client.execute({
@@ -60,9 +62,25 @@ router.get('/status', telegramAuth, async (req, res) => {
       ...user,
       total_referrals: Number(totalRes.rows[0].cnt),
       successful_referrals: Number(successfulRes.rows[0].cnt),
-      available_claims: Math.floor((user.pending_referral_balance || 0) / REFERRAL_BASE_REWARD),
-      reward_per_claim: REFERRAL_BASE_REWARD,
+      available_claims: Math.floor((user.pending_referral_balance || 0) / referralReward),
+      reward_per_claim: referralReward,
     });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Real list of directly-referred users, most recent first — powers the
+// "Latest invited friends" section. Only username + join date, nothing
+// else about them is exposed here.
+router.get('/invited', telegramAuth, async (req, res) => {
+  try {
+    const res_ = await client.execute({
+      sql: `SELECT telegram_id, username, created_at FROM users
+            WHERE referred_by = ? ORDER BY created_at DESC LIMIT 50`,
+      args: [req.telegramUser.id],
+    });
+    res.json({ ok: true, invited: res_.rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

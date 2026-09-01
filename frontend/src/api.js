@@ -42,6 +42,7 @@ export const api = {
   prepareSpin: () => apiCall('/spin/prepare', { method: 'POST' }),
   playSpin: (nonce) => apiCall('/spin/play', { method: 'POST', body: { nonce } }),
   referralStatus: () => apiCall('/referral/status'),
+  referralInvited: () => apiCall('/referral/invited'),
   prepareClaim: () => apiCall('/referral/prepare-claim', { method: 'POST' }),
   claimReferral: (nonce) => apiCall('/referral/claim', { method: 'POST', body: { nonce } }),
   requestWithdrawal: (address, points) =>
