@@ -129,7 +129,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
         </div>
       </div>
 
-      {isFreeSpin && <p className="spin-free-badge">🎁 Free spin — {config.free_spins_remaining} left</p>}
+      {isFreeSpin && <p className="spin-free-badge">🎁 Free Spin — {config.free_spins_remaining} left</p>}
 
       <button className="gold-button spin-button" onClick={handleSpin} disabled={spinning || !canAfford || !config}>
         {spinning
