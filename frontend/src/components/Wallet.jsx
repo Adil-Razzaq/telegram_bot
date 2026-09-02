@@ -192,27 +192,18 @@ export default function Wallet({
       </div>
       {walletError && <p className="wallet-error">{walletError}</p>}
 
-      {withdrawalsDisabled && (
-        <div className="maintenance-banner">
-          <span className="maintenance-banner-icon">🛠️</span>
-          <p>{config?.withdrawals?.message}</p>
-        </div>
-      )}
-
       <div className="glass-card" style={{ marginTop: 12 }}>
         <span className="glass-card-icon round">📤</span>
         <div className="glass-card-body">
           <p className="glass-card-title">Withdraw</p>
-          <p className="glass-card-subtitle">
-            {withdrawalsDisabled ? 'Temporarily paused' : 'Transfer balance to your wallet'}
-          </p>
+          <p className="glass-card-subtitle">Transfer balance to your wallet</p>
         </div>
         <button
           className="gold-button"
           onClick={() => setShowWithdrawForm((v) => !v)}
           disabled={withdrawalsDisabled}
         >
-          Withdraw
+          {withdrawalsDisabled ? (config?.withdrawals?.message || 'Unavailable') : 'Withdraw'}
         </button>
       </div>
 

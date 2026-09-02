@@ -16,8 +16,11 @@ const { client } = require('../db/db');
 const KNOWN_FLAGS = {
   withdrawals: {
     defaultEnabled: true,
-    defaultMessage:
-      "We're working on launching our own coin — withdrawals are paused for now and expected back within 2–3 weeks. Your balance is safe and untouched.",
+    // Short by design — this replaces the Withdraw button's label
+    // directly when disabled (e.g. button reads "Coming Soon" instead
+    // of "Withdraw"), not a paragraph shown elsewhere. Keep it to a
+    // couple of words.
+    defaultMessage: 'Coming Soon',
   },
 };
 

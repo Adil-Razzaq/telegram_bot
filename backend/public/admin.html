@@ -326,8 +326,8 @@
             <input type="checkbox" id="flag-enabled-${key}" ${flags[key].enabled ? 'checked' : ''} style="width:auto" />
             ${FLAG_LABELS[key] || key} — enabled
           </label>
-          <label>Message shown to users when disabled (e.g. "Coming Soon", "Maintenance", "Emergency Pause")</label>
-          <textarea id="flag-message-${key}" rows="3" style="width:100%; box-sizing:border-box">${flags[key].message}</textarea>
+          <label>Button text shown when disabled (e.g. "Coming Soon", "Maintenance") — keep it short, this replaces the button's label directly</label>
+          <input id="flag-message-${key}" type="text" value="${flags[key].message}" maxlength="20" />
           <button onclick="saveFlag('${key}')" style="margin-top:6px">Save ${FLAG_LABELS[key] || key}</button>
         </div>
       `).join('');
