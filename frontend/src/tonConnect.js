@@ -1,4 +1,4 @@
-import { TonConnectUI } from '@tonconnect/ui';
+import { TonConnectUI, toUserFriendlyAddress } from '@tonconnect/ui';
 
 /**
  * TON Connect (the official Telegram-endorsed wallet protocol — Tonkeeper,
@@ -16,6 +16,15 @@ import { TonConnectUI } from '@tonconnect/ui';
  *     rule (walletService.js) is what turns "same wallet reconnected"
  *     into "same account recognized", not anything TON Connect itself
  *     does — TON Connect only proves which wallet is talking to you.
+ *
+ *   - TON Connect hands back addresses in RAW format (e.g.
+ *     "0:abc123...") by default — NOT what Tonkeeper itself displays to
+ *     the user (the "EQ..."/"UQ..." user-friendly format). Every place
+ *     below that resolves an address runs it through
+ *     toUserFriendlyAddress() first, so what gets stored/shown always
+ *     matches what the user actually sees inside their own wallet app —
+ *     otherwise it looks like a completely different address even
+ *     though it's the same account underneath.
  *
  * REQUIRES a tonconnect-manifest.json hosted at a public HTTPS URL (see
  * frontend/public/tonconnect-manifest.json) — this is a hard requirement
@@ -47,7 +56,7 @@ export function initTonConnectAutoConnect() {
     // future connect/disconnect — this single subscription covers both
     // "auto connect on load" and "user connects later in this session".
     const unsubscribe = ui.onStatusChange((wallet) => {
-      resolve(wallet ? wallet.account.address : null);
+      resolve(wallet ? toUserFriendlyAddress(wallet.account.address) : null);
     });
     // Safety timeout: if TON Connect's restore genuinely has nothing to
     // report (fresh visitor, no prior session), don't hang the caller
@@ -68,7 +77,7 @@ export function connectTonWallet() {
     const unsubscribe = ui.onStatusChange((wallet) => {
       if (wallet) {
         unsubscribe();
-        resolve(wallet.account.address);
+        resolve(toUserFriendlyAddress(wallet.account.address));
       }
     });
     ui.openModal();
@@ -91,5 +100,5 @@ export async function disconnectTonWallet() {
 
 export function getConnectedTonAddress() {
   const ui = getTonConnectUI();
-  return ui.connected ? ui.account.address : null;
+  return ui.connected ? toUserFriendlyAddress(ui.account.address) : null;
 }

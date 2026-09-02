@@ -36,6 +36,19 @@ export default function App() {
       setDisplayName(fullName || user.username || 'Player');
     }
 
+    // Second, independent path for crediting referrals — doesn't depend
+    // on the bot's webhook at all (see routes/bot.js for the other
+    // path). Telegram hands us this directly when the app is opened via
+    // a `?startapp=ref_123` link (see Friends.jsx), even if the user
+    // never triggers an actual /start message in the bot chat. Safe to
+    // call unconditionally on every load — the backend treats "already
+    // referred" as a harmless no-op, not an error.
+    const startParam = tg?.initDataUnsafe?.start_param;
+    const refMatch = startParam && startParam.match(/^ref_(\d+)$/);
+    if (refMatch) {
+      api.registerReferral(Number(refMatch[1])).catch(() => {});
+    }
+
     api
       .getMe()
       .then((me) => {

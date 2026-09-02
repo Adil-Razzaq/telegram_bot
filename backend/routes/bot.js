@@ -8,16 +8,54 @@ const router = express.Router();
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
 async function sendWelcomeMessage(chatId) {
+  const backendUrl = process.env.BACKEND_PUBLIC_URL;
+  const caption = [
+    '👋 Welcome to ADLX Miner!',
+    '',
+    '⛏️ Mine ADLX tokens directly to your Pool Wallet.',
+    '⚡ Watch a quick ad to start or restart your mining cycle.',
+    '🔗 Connect your TON wallet — right from the Mine tab.',
+    '🎡 Spin the wheel, complete tasks, and invite friends for more ADLX.',
+    '',
+    'Tap below to start.',
+  ].join('\n');
+
+  // Row 1: opens the Mini App — same URL/behavior as before, just
+  // moved into this richer message. Rows 2+: plain link buttons, each
+  // only included if its URL is actually configured — a placeholder
+  // link is worse than no button at all.
+  const keyboard = [[{ text: '🚀 Start Mining', web_app: { url: process.env.MINI_APP_URL } }]];
+  const linkRow = [];
+  if (process.env.ADLX_PAY_URL) linkRow.push({ text: 'ADLX PAY', url: process.env.ADLX_PAY_URL });
+  if (process.env.ADLX_OFFICIAL_URL) linkRow.push({ text: 'ADLX OFFICIAL', url: process.env.ADLX_OFFICIAL_URL });
+  if (process.env.ADLX_SUPPORT_URL) linkRow.push({ text: 'ADLX SUPPORT', url: process.env.ADLX_SUPPORT_URL });
+  if (linkRow.length > 0) keyboard.push(linkRow);
+
+  const reply_markup = { inline_keyboard: keyboard };
+
+  // Prefer sendPhoto (matches the reference design) when we have a
+  // public URL for the welcome image; fall back to the old plain-text
+  // message if BACKEND_PUBLIC_URL isn't set yet, rather than failing
+  // silently or crashing the webhook handler.
+  if (backendUrl) {
+    const res = await fetch(`${TELEGRAM_API}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: `${backendUrl}/assets/welcome.png`,
+        caption,
+        reply_markup,
+      }),
+    });
+    if (res.ok) return;
+    console.error('sendPhoto failed, falling back to sendMessage:', await res.text());
+  }
+
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: 'Welcome! Tap below to open the app.',
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Play', web_app: { url: process.env.MINI_APP_URL } }]],
-      },
-    }),
+    body: JSON.stringify({ chat_id: chatId, text: caption, reply_markup }),
   });
 }
 

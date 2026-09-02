@@ -59,6 +59,8 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+app.use('/assets', express.static(path.join(__dirname, 'public')));
+
 app.use('/api/spin', spinRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);

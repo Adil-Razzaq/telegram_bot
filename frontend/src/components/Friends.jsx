@@ -24,8 +24,14 @@ export default function Friends({ telegramId, onBalanceChange }) {
   const timerRef = useRef(null);
 
   const botUsername = import.meta.env?.VITE_BOT_USERNAME;
+  // startapp= (not start=) — opens the Mini App DIRECTLY, no bot-chat
+  // detour, and delivers the referral code via
+  // initDataUnsafe.start_param (read in App.jsx). This works reliably
+  // regardless of whether the bot's webhook is registered/working —
+  // start= alone depends entirely on that webhook, which is the whole
+  // reason referrals were silently failing before.
   const refLink =
-    telegramId && botUsername ? `https://t.me/${botUsername}?start=ref_${telegramId}` : null;
+    telegramId && botUsername ? `https://t.me/${botUsername}?startapp=ref_${telegramId}` : null;
 
   const refreshStatus = useCallback(async () => {
     try {

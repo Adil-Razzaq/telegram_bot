@@ -177,18 +177,4 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Backend-controlled on/off switches with an editable message, e.g.
--- disabling withdrawals for maintenance and showing a custom "Coming
--- soon" / "Under maintenance" message in the app instead of the form.
--- Enforced server-side too (not just hidden in the UI) — see
--- withdrawalService.js.
-CREATE TABLE IF NOT EXISTS feature_flags (
-    key TEXT PRIMARY KEY,
-    enabled INTEGER DEFAULT 1,
-    message TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-INSERT OR IGNORE INTO feature_flags (key, enabled, message)
-    VALUES ('withdrawal', 1, 'Withdrawals are temporarily disabled for maintenance. Please check back soon.');
-
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

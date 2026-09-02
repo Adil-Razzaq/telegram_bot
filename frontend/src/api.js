@@ -45,10 +45,11 @@ export const api = {
   playSpin: (nonce) => apiCall('/spin/play', { method: 'POST', body: { nonce } }),
   referralStatus: () => apiCall('/referral/status'),
   referralInvited: () => apiCall('/referral/invited'),
+  registerReferral: (referrerId) =>
+    apiCall('/referral/register', { method: 'POST', body: { referrer_id: referrerId } }),
   prepareClaim: () => apiCall('/referral/prepare-claim', { method: 'POST' }),
   claimReferral: (nonce) => apiCall('/referral/claim', { method: 'POST', body: { nonce } }),
   requestWithdrawal: (address, points) =>
     apiCall('/withdrawal/request', { method: 'POST', body: { address, points } }),
-  withdrawalStatus: () => apiCall('/withdrawal/status'),
   withdrawalHistory: () => apiCall('/withdrawal/history'),
 };

@@ -108,14 +108,6 @@
     <div id="announceStatus" class="status-msg"></div>
   </div>
 
-  <h2>Feature Flags</h2>
-  <div class="card">
-    <p class="muted">Toggle app features on/off with a custom message shown in place of the disabled feature — no deploy needed, takes effect within ~15 seconds.</p>
-    <div id="flagsFields">Loading…</div>
-    <button onclick="saveFlags()" style="margin-top:8px">Save Flags</button>
-    <div id="flagsStatus" class="status-msg"></div>
-  </div>
-
   <h2>Settings</h2>
   <div class="card">
     <p class="muted">Every admin-tunable number in the app. Changes take effect within ~15 seconds, no deploy needed.</p>
@@ -274,61 +266,12 @@
     miner_daily_points: 'Miner: total points/day',
     miner_cycles_per_day: 'Miner: cycles/day',
     miner_cycle_hours: 'Miner: hours/cycle',
-    spin_entry_fee: 'Spin: entry fee (ADLX)',
-    spin_free_spins: 'Spin: free spins for new users',
-    spin_payout_1: 'Spin: payout — segment 1',
-    spin_payout_2: 'Spin: payout — segment 2',
-    spin_payout_3: 'Spin: payout — segment 3',
-    spin_payout_4: 'Spin: payout — segment 4',
-    spin_payout_5: 'Spin: payout — segment 5',
-    spin_payout_6: 'Spin: payout — segment 6',
   };
-
-  let lastKnownFlagKeys = [];
-
-  async function loadFlags() {
-    const el = document.getElementById('flagsFields');
-    try {
-      const { flags } = await adminFetch('/admin/flags');
-      lastKnownFlagKeys = Object.keys(flags);
-      el.innerHTML = lastKnownFlagKeys.map((key) => `
-        <div style="border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:10px">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
-            <input id="flag-enabled-${key}" type="checkbox" style="width:auto; margin:0" ${flags[key].enabled ? 'checked' : ''} />
-            <span style="text-transform:capitalize">${key.replace(/_/g, ' ')}</span>
-          </label>
-          <input id="flag-message-${key}" type="text" placeholder="Message shown when disabled" value="${(flags[key].message || '').replace(/"/g, '&quot;')}" style="margin-top:6px" />
-        </div>
-      `).join('');
-    } catch (e) {
-      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
-    }
-  }
-
-  async function saveFlags() {
-    const statusEl = document.getElementById('flagsStatus');
-    statusEl.textContent = '';
-    try {
-      for (const key of lastKnownFlagKeys) {
-        const enabled = document.getElementById('flag-enabled-' + key).checked;
-        const message = document.getElementById('flag-message-' + key).value;
-        await adminFetch('/admin/flags', { method: 'POST', body: JSON.stringify({ key, enabled, message }) });
-      }
-      statusEl.textContent = 'Saved — applies within ~15 seconds.';
-      statusEl.className = 'status-msg ok';
-    } catch (e) {
-      statusEl.textContent = e.message;
-      statusEl.className = 'status-msg err';
-    }
-  }
-
-  let lastKnownSettingsKeys = [];
 
   async function loadSettings() {
     const el = document.getElementById('settingsFields');
     try {
       const { settings, known_keys } = await adminFetch('/admin/settings');
-      lastKnownSettingsKeys = known_keys;
       el.innerHTML = known_keys.map((key) => `
         <label>${SETTINGS_LABELS[key] || key}</label>
         <input id="setting-${key}" type="number" value="${settings[key]}" />
@@ -343,11 +286,7 @@
     statusEl.textContent = '';
     try {
       const body = {};
-      // Iterates whatever fields are actually rendered (driven by the
-      // backend's own known_keys), not a separately-maintained list —
-      // so a setting added on the backend is automatically saveable
-      // here too, with no risk of the two silently drifting apart.
-      lastKnownSettingsKeys.forEach((key) => {
+      Object.keys(SETTINGS_LABELS).forEach((key) => {
         const input = document.getElementById('setting-' + key);
         if (input) body[key] = Number(input.value);
       });
@@ -403,7 +342,6 @@
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
     loadSettings();
-    loadFlags();
     loadCoinStats();
     loadAdRevenue();
   }
