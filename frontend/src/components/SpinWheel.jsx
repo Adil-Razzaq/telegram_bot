@@ -93,7 +93,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
   return (
     <div className="spin-wheel-container">
       <h2 className="page-title">Spin</h2>
-      <p className="page-subtitle">Watch a short ad, spin the wheel, win ADLX</p>
+      <p className="page-subtitle">Watch, Spin, & Win ADLX!</p>
 
       <div className="spin-wheel-frame">
         <div className="spin-wheel-wrap">

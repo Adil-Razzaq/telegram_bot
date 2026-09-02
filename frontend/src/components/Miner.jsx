@@ -197,8 +197,7 @@ export default function Miner({
 
       {isRunning && (
         <p className="miner-copy">
-          {formatDuration(secondsLeft)} left in this cycle — claim anytime for what's accrued so far,
-          or wait for it to finish.
+          {formatDuration(secondsLeft)} Claim now or wait until the end.
         </p>
       )}
       {canRestart && (
