@@ -177,4 +177,26 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ADDED: generic on/off switches with a custom message, editable live
+-- from the admin panel — built for "withdrawals" first, but reusable
+-- for any future feature that might need an emergency pause with an
+-- explanation shown to users (the message is free text, so it can say
+-- "Coming Soon", "Maintenance", "Emergency Pause — investigating", or
+-- anything else, renamed anytime with no deploy).
+CREATE TABLE IF NOT EXISTS feature_flags (
+    key TEXT PRIMARY KEY,
+    enabled INTEGER DEFAULT 1,
+    message TEXT DEFAULT '',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ADDED: the bot's /start welcome message (caption, button labels, link
+-- URLs) as admin-editable content instead of hardcoded strings/env vars
+-- — see utils/botContent.js and the admin panel's Bot Message section.
+CREATE TABLE IF NOT EXISTS bot_content (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

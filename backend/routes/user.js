@@ -2,6 +2,7 @@ const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
 const { client } = require('../db/db');
 const { getAllSettings } = require('../utils/settings');
+const { getFlag } = require('../utils/featureFlags');
 
 const router = express.Router();
 
@@ -23,9 +24,13 @@ router.get('/me', telegramAuth, async (req, res) => {
 // Lets the frontend render correct $ amounts and copy (points_per_usd,
 // referral_reward, miner_daily_points, etc.) WITHOUT hardcoding numbers
 // that can drift the moment an admin changes them via the admin panel.
+// Also carries the withdrawals feature flag so Profile can show the
+// admin's custom maintenance/coming-soon message and disable the
+// Withdraw button, without a separate round-trip.
 router.get('/config', telegramAuth, async (req, res) => {
   try {
-    res.json({ ok: true, ...(await getAllSettings()) });
+    const [settings, withdrawalsFlag] = await Promise.all([getAllSettings(), getFlag('withdrawals')]);
+    res.json({ ok: true, ...settings, withdrawals: withdrawalsFlag });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

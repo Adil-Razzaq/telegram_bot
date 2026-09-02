@@ -116,6 +116,21 @@
     <div id="settingsStatus" class="status-msg"></div>
   </div>
 
+  <h2>Feature Flags</h2>
+  <div class="card">
+    <p class="muted">Pause a feature app-wide with a custom message shown to users — reusable for any future emergency, not just this list. Renamed anytime, no deploy.</p>
+    <div id="flagsFields">Loading…</div>
+    <div id="flagsStatus" class="status-msg"></div>
+  </div>
+
+  <h2>Bot Welcome Message</h2>
+  <div class="card">
+    <p class="muted">Editing this changes what the NEXT /start sends — it doesn't retroactively edit messages already delivered.</p>
+    <div id="botContentFields">Loading…</div>
+    <button onclick="saveBotContent()" style="margin-top:8px">Save Bot Message</button>
+    <div id="botContentStatus" class="status-msg"></div>
+  </div>
+
   <h2>Coin Stats</h2>
   <div class="card">
     <p class="muted">Platform-wide totals across all users.</p>
@@ -299,6 +314,92 @@
     }
   }
 
+  const FLAG_LABELS = { withdrawals: 'Withdrawals' };
+
+  async function loadFlags() {
+    const el = document.getElementById('flagsFields');
+    try {
+      const { flags, known_keys } = await adminFetch('/admin/flags');
+      el.innerHTML = known_keys.map((key) => `
+        <div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid #222">
+          <label style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
+            <input type="checkbox" id="flag-enabled-${key}" ${flags[key].enabled ? 'checked' : ''} style="width:auto" />
+            ${FLAG_LABELS[key] || key} — enabled
+          </label>
+          <label>Message shown to users when disabled (e.g. "Coming Soon", "Maintenance", "Emergency Pause")</label>
+          <textarea id="flag-message-${key}" rows="3" style="width:100%; box-sizing:border-box">${flags[key].message}</textarea>
+          <button onclick="saveFlag('${key}')" style="margin-top:6px">Save ${FLAG_LABELS[key] || key}</button>
+        </div>
+      `).join('');
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
+  async function saveFlag(key) {
+    const statusEl = document.getElementById('flagsStatus');
+    statusEl.textContent = '';
+    try {
+      const enabled = document.getElementById('flag-enabled-' + key).checked;
+      const message = document.getElementById('flag-message-' + key).value;
+      await adminFetch('/admin/flags/' + key, { method: 'POST', body: JSON.stringify({ enabled, message }) });
+      statusEl.textContent = 'Saved — applies within ~10 seconds.';
+      statusEl.className = 'status-msg ok';
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
+  }
+
+  const BOT_CONTENT_LABELS = {
+    welcome_caption: 'Welcome caption (multi-line)',
+    start_button_label: 'Start Mining button label',
+    pay_button_label: 'ADLX PAY button label',
+    pay_button_url: 'ADLX PAY button URL',
+    official_button_label: 'ADLX OFFICIAL button label',
+    official_button_url: 'ADLX OFFICIAL button URL',
+    support_button_label: 'ADLX SUPPORT button label',
+    support_button_url: 'ADLX SUPPORT button URL',
+  };
+
+  async function loadBotContent() {
+    const el = document.getElementById('botContentFields');
+    try {
+      const { content, known_keys } = await adminFetch('/admin/bot-content');
+      el.innerHTML = known_keys.map((key) => {
+        const isCaption = key === 'welcome_caption';
+        return `
+        <label>${BOT_CONTENT_LABELS[key] || key}</label>
+        ${
+          isCaption
+            ? `<textarea id="bot-${key}" rows="6" style="width:100%; box-sizing:border-box">${content[key]}</textarea>`
+            : `<input id="bot-${key}" type="text" value="${content[key]}" />`
+        }
+      `;
+      }).join('');
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
+  async function saveBotContent() {
+    const statusEl = document.getElementById('botContentStatus');
+    statusEl.textContent = '';
+    try {
+      const body = {};
+      Object.keys(BOT_CONTENT_LABELS).forEach((key) => {
+        const input = document.getElementById('bot-' + key);
+        if (input) body[key] = input.value;
+      });
+      await adminFetch('/admin/bot-content', { method: 'POST', body: JSON.stringify(body) });
+      statusEl.textContent = 'Saved — the next /start will use this.';
+      statusEl.className = 'status-msg ok';
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
+  }
+
   async function loadCoinStats() {
     const el = document.getElementById('coinStatsSummary');
     el.textContent = 'Loading…';
@@ -342,6 +443,8 @@
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
     loadSettings();
+    loadFlags();
+    loadBotContent();
     loadCoinStats();
     loadAdRevenue();
   }

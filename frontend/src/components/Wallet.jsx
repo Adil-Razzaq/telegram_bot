@@ -76,6 +76,7 @@ export default function Wallet({
   }
 
   const pointsPerUsd = config?.points_per_usd || 10000;
+  const withdrawalsDisabled = config?.withdrawals && config.withdrawals.enabled === false;
   const pointsNum = Number(points);
   const addressValid = TON_ADDRESS_REGEX.test(address);
   const amountValid =
@@ -191,18 +192,31 @@ export default function Wallet({
       </div>
       {walletError && <p className="wallet-error">{walletError}</p>}
 
+      {withdrawalsDisabled && (
+        <div className="maintenance-banner">
+          <span className="maintenance-banner-icon">🛠️</span>
+          <p>{config?.withdrawals?.message}</p>
+        </div>
+      )}
+
       <div className="glass-card" style={{ marginTop: 12 }}>
         <span className="glass-card-icon round">📤</span>
         <div className="glass-card-body">
           <p className="glass-card-title">Withdraw</p>
-          <p className="glass-card-subtitle">Transfer balance to your wallet</p>
+          <p className="glass-card-subtitle">
+            {withdrawalsDisabled ? 'Temporarily paused' : 'Transfer balance to your wallet'}
+          </p>
         </div>
-        <button className="gold-button" onClick={() => setShowWithdrawForm((v) => !v)}>
+        <button
+          className="gold-button"
+          onClick={() => setShowWithdrawForm((v) => !v)}
+          disabled={withdrawalsDisabled}
+        >
           Withdraw
         </button>
       </div>
 
-      {showWithdrawForm && (
+      {showWithdrawForm && !withdrawalsDisabled && (
         <form onSubmit={handleSubmit} className="wallet-form">
           <label>
             TON wallet address

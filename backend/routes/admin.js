@@ -4,6 +4,8 @@ const { sendTelegramMessage } = require('../utils/telegram');
 const { client } = require('../db/db');
 const { createTask, listAllTasksAdmin, setTaskActive, updateTask, deleteTask } = require('../services/taskService');
 const { getAllSettings, setSetting, DEFAULTS } = require('../utils/settings');
+const { getAllFlags, setFlag, KNOWN_FLAGS } = require('../utils/featureFlags');
+const { getAllBotContent, setBotContent, DEFAULTS: BOT_CONTENT_DEFAULTS } = require('../utils/botContent');
 const {
   listPendingWithdrawals,
   completeWithdrawal,
@@ -300,6 +302,60 @@ router.get('/coin-stats', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Feature flags: generic on/off + custom message, reusable for any
+// future "pause this with an explanation" need — see utils/featureFlags.js.
+
+router.get('/flags', async (req, res) => {
+  try {
+    res.json({ ok: true, flags: await getAllFlags({ forceRefresh: true }), known_keys: Object.keys(KNOWN_FLAGS) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Body: { enabled: true/false, message: "..." } — message is free text,
+// rename it "Maintenance", "Coming Soon", or anything else, anytime.
+router.post('/flags/:key', async (req, res) => {
+  const { enabled, message } = req.body || {};
+  try {
+    await setFlag(req.params.key, { enabled: !!enabled, message });
+    res.json({ ok: true, flags: await getAllFlags({ forceRefresh: true }) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Bot welcome message content: caption, button labels, link URLs —
+// see utils/botContent.js. Editing this takes effect on the NEXT /start
+// a user sends; it doesn't retroactively edit messages already sent.
+
+router.get('/bot-content', async (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      content: await getAllBotContent({ forceRefresh: true }),
+      known_keys: Object.keys(BOT_CONTENT_DEFAULTS),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Body: { "key": "value", ... } — same batch-update shape as /settings.
+router.post('/bot-content', async (req, res) => {
+  const updates = req.body || {};
+  const keys = Object.keys(updates);
+  if (keys.length === 0) {
+    return res.status(400).json({ ok: false, error: 'Provide at least one field to update' });
+  }
+  try {
+    for (const key of keys) await setBotContent(key, updates[key]);
+    res.json({ ok: true, content: await getAllBotContent({ forceRefresh: true }) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
 });
 

@@ -93,7 +93,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
   return (
     <div className="spin-wheel-container">
       <h2 className="page-title">Spin</h2>
-      <p className="page-subtitle">Watch, Spin, & Win ADLX!</p>
+      <p className="page-subtitle">Watch a short ad, spin the wheel, win ADLX</p>
 
       <div className="spin-wheel-frame">
         <div className="spin-wheel-wrap">
@@ -129,7 +129,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
         </div>
       </div>
 
-      {isFreeSpin && <p className="spin-free-badge">🎁 Free Spin — {config.free_spins_remaining} left</p>}
+      {isFreeSpin && <p className="spin-free-badge">🎁 Free spin — {config.free_spins_remaining} left</p>}
 
       <button className="gold-button spin-button" onClick={handleSpin} disabled={spinning || !canAfford || !config}>
         {spinning

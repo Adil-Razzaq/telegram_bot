@@ -543,6 +543,29 @@ h3 {
 .wallet-success { color: var(--success); font-size: 13px; }
 .wallet-empty { color: var(--muted); font-size: 13px; }
 
+/* Generic maintenance/paused-feature banner — driven by
+   utils/featureFlags.js, so the icon/style stays the same regardless of
+   what the admin's custom message actually says. */
+.maintenance-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(214, 158, 46, 0.1);
+  border: 1px solid rgba(214, 158, 46, 0.35);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 4px 0 10px;
+}
+
+.maintenance-banner-icon { font-size: 18px; flex-shrink: 0; }
+
+.maintenance-banner p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--gold-light);
+}
+
 .wallet-history { list-style: none; padding: 0; margin: 0; }
 
 .wallet-history-item {

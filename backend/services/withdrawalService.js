@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { client } = require('../db/db');
 const { sendTelegramMessage } = require('../utils/telegram');
 const { getSetting } = require('../utils/settings');
+const { getFlag } = require('../utils/featureFlags');
 
 // TON addresses, not BEP-20 — matches the TON Connect / Tonkeeper wallet
 // integration (see walletService.js). Accepts both the common
@@ -11,6 +12,12 @@ const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{6
 const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at the default 10,000 pts = $1 rate
 
 async function requestWithdrawal({ telegramId, address, points }) {
+  const withdrawalsFlag = await getFlag('withdrawals');
+  if (!withdrawalsFlag.enabled) {
+    const err = new Error(withdrawalsFlag.message || 'Withdrawals are temporarily unavailable.');
+    err.statusCode = 403;
+    throw err;
+  }
   if (!TON_ADDRESS_REGEX.test(address || '')) {
     const err = new Error('Invalid TON wallet address format');
     err.statusCode = 400;
