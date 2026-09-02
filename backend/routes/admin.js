@@ -4,6 +4,7 @@ const { sendTelegramMessage } = require('../utils/telegram');
 const { client } = require('../db/db');
 const { createTask, listAllTasksAdmin, setTaskActive, updateTask, deleteTask } = require('../services/taskService');
 const { getAllSettings, setSetting, DEFAULTS } = require('../utils/settings');
+const { getAllFlags, setFlag } = require('../utils/featureFlags');
 const {
   listPendingWithdrawals,
   completeWithdrawal,
@@ -298,6 +299,29 @@ router.get('/coin-stats', async (req, res) => {
         total_usd: toUsd(total),
       },
     });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// List and toggle feature flags (e.g. disabling withdrawals for
+// maintenance, with a custom message shown in the app).
+router.get('/flags', async (req, res) => {
+  try {
+    res.json({ ok: true, flags: await getAllFlags({ forceRefresh: true }) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/flags', async (req, res) => {
+  const { key, enabled, message } = req.body;
+  if (!key) {
+    return res.status(400).json({ ok: false, error: 'key is required' });
+  }
+  try {
+    await setFlag(key, !!enabled, message);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

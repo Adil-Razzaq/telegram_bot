@@ -1,6 +1,6 @@
 const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
-const { prepareClaim, claimReferral, grantReferral } = require('../services/referralService');
+const { prepareClaim, claimReferral } = require('../services/referralService');
 const { client } = require('../db/db');
 const { getSetting } = require('../utils/settings');
 
@@ -26,30 +26,8 @@ router.post('/claim', telegramAuth, async (req, res) => {
   }
 });
 
-// Granting normally happens via routes/bot.js when a referred user
-// sends /start (needs the Telegram webhook registered — see
-// DEPLOYMENT.md). This is a second, independent path that doesn't
-// depend on that webhook at all: the frontend calls this once on load
-// if Telegram handed it a start_param (see App.jsx + Friends.jsx's
-// startapp= link format). Idempotent via users.referred_by, same as
-// the webhook path — safe to call on every load, silently a no-op if
-// this user is already referred or this fails validation.
-router.post('/register', telegramAuth, async (req, res) => {
-  const referrerId = Number(req.body?.referrer_id);
-  if (!Number.isFinite(referrerId)) {
-    return res.status(400).json({ ok: false, error: 'referrer_id required' });
-  }
-  try {
-    const result = await grantReferral({ referrerId, referredTelegramId: req.telegramUser.id });
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    // Self-referral and "already referred" are expected, harmless
-    // outcomes here (this can get called on every app load) — not
-    // real errors worth surfacing to the user.
-    res.json({ ok: true, skipped: err.message });
-  }
-});
-
+// Granting happens automatically in routes/bot.js when a referred user
+// sends /start — nothing needs to call this from the frontend.
 router.get('/status', telegramAuth, async (req, res) => {
   const telegramId = req.telegramUser.id;
   const referralReward = await getSetting('referral_reward');

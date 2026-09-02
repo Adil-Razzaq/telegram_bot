@@ -2,24 +2,18 @@ const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
 const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
 
-// Base probabilities only — the actual payout AMOUNTS come from
-// settings (spin_payout_1..6, admin-editable). Weights recalibrated so
-// a PAID spin's expected value ≈ 50% of the entry fee — i.e. across
-// many spins, roughly half of what's collected in entry fees flows
-// back out as winnings, the other half is margin. With the default
-// payouts (10/20/50/100/200/500) and these weights, EV ≈ 49.8 against
-// a 100-point entry fee. If you change the payout values via the admin
-// panel, these weights won't auto-recalculate — you'd want to rebalance
-// them too to keep the ~50/50 split accurate.
+// Base probabilities only — the actual payout AMOUNTS now come from
+// settings (spin_payout_1..6, admin-editable), so this only defines the
+// odds and the pool-affordability/unlock rules per segment slot.
 const SEGMENT_WEIGHTS = [
-  { index: 1, weight: 0.32 },
-  { index: 2, weight: 0.28 },
-  { index: 3, weight: 0.19 },
-  { index: 4, weight: 0.15 },
-  { index: 5, weight: 0.045, isEligible: (pool) => pool.daily_collected >= 400 },
+  { index: 1, weight: 0.40 },
+  { index: 2, weight: 0.30 },
+  { index: 3, weight: 0.15 },
+  { index: 4, weight: 0.10 },
+  { index: 5, weight: 0.04, isEligible: (pool) => pool.daily_collected >= 400 },
   {
     index: 6,
-    weight: 0.015,
+    weight: 0.01,
     isEligible: (pool, payout) => pool.daily_collected >= 5000 && pool.current_pool_points >= payout,
   },
 ];
@@ -62,26 +56,6 @@ function pickSegment(segments, pool) {
   return eligible[eligible.length - 1]; // floating point safety net
 }
 
-// For a FREE spin, the payout isn't random — it's whatever segment's
-// value sits closest to what the ad genuinely earned (50% revenue
-// share, same model as bonusAdService.js), so the wheel visually lands
-// on a number that's honestly "about" what that ad view was worth,
-// rather than a random unrelated amount. Still constrained to pool-
-// affordable/eligible segments — a free spin can't land on a segment
-// the pool can't actually pay out.
-const FREE_SPIN_REVENUE_SHARE = 0.5;
-
-function pickNearestSegment(segments, pool, targetValue) {
-  const eligible = segments.filter((seg) => {
-    if (seg.payout > pool.current_pool_points) return false;
-    if (seg.isEligible && !seg.isEligible(pool, seg.payout)) return false;
-    return true;
-  });
-  return eligible.reduce((closest, seg) =>
-    Math.abs(seg.payout - targetValue) < Math.abs(closest.payout - targetValue) ? seg : closest
-  );
-}
-
 /**
  * Public config for the frontend — current payouts, entry fee, and how
  * many free spins this specific user has left. Lets the wheel's labels
@@ -118,12 +92,9 @@ async function playSpin({ telegramId, nonce }) {
   // (e.g. insufficient balance), the ad view is "spent" either way —
   // that's an acceptable tradeoff for keeping this atomic and simple,
   // and it's not exploitable (a wasted ad view costs the user, not us).
-  // event.estimated_price (Monetag's real revenue for this exact ad
-  // view) is what a free spin's payout gets matched against below.
-  const event = await consumeAdEvent({ nonce, telegramId, action: 'spin' });
+  await consumeAdEvent({ nonce, telegramId, action: 'spin' });
 
   const config = await getSpinConfig();
-  const settings = await getAllSettings();
 
   const tx = await client.transaction('write');
   try {
@@ -168,23 +139,10 @@ async function playSpin({ telegramId, nonce }) {
       args: [telegramId, 'spin_entry', -entryFee, JSON.stringify({ free_spin: isFreeSpin })],
     });
 
-    // 2. Evaluate pool state AFTER the entry fee lands, then pick a segment.
+    // 2. Evaluate pool state AFTER the entry fee lands, then pick a segment
     const poolRes = await tx.execute('SELECT * FROM spin_pool WHERE id = 1');
     const pool = poolRes.rows[0];
-
-    // Free spins land on whatever segment is closest to what the ad
-    // actually earned (50% revenue share) — small, honest, real-value
-    // rewards for a brand-new user, instead of the same random-jackpot
-    // odds as a paid spin. Paid spins keep the weighted-random pick,
-    // now calibrated for ~50% RTP against the entry fee (see
-    // SEGMENT_WEIGHTS above).
-    const segment = isFreeSpin
-      ? pickNearestSegment(
-          config.segments,
-          pool,
-          (event.estimated_price || 0) * settings.points_per_usd * FREE_SPIN_REVENUE_SHARE
-        )
-      : pickSegment(config.segments, pool);
+    const segment = pickSegment(config.segments, pool);
 
     // 3. Pay out
     if (segment.payout > 0) {

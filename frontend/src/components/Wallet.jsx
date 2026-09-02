@@ -20,6 +20,7 @@ export default function Wallet({
   onDisconnectWallet,
 }) {
   const [config, setConfig] = useState(null);
+  const [withdrawalStatus, setWithdrawalStatus] = useState(null);
 
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -45,6 +46,7 @@ export default function Wallet({
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch(() => {});
+    api.withdrawalStatus().then(setWithdrawalStatus).catch(() => {});
   }, []);
 
   // Keep the withdrawal address field pre-filled with whatever's
@@ -191,49 +193,64 @@ export default function Wallet({
       </div>
       {walletError && <p className="wallet-error">{walletError}</p>}
 
-      <div className="glass-card" style={{ marginTop: 12 }}>
-        <span className="glass-card-icon round">📤</span>
-        <div className="glass-card-body">
-          <p className="glass-card-title">Withdraw</p>
-          <p className="glass-card-subtitle">Transfer balance to your wallet</p>
+      {withdrawalStatus && !withdrawalStatus.enabled ? (
+        <div className="glass-card" style={{ marginTop: 12, opacity: 0.75 }}>
+          <span className="glass-card-icon round" style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+            🛠️
+          </span>
+          <div className="glass-card-body">
+            <p className="glass-card-title">Withdraw</p>
+            <p className="glass-card-subtitle">{withdrawalStatus.message}</p>
+          </div>
+          <span className="coming-soon-badge">Coming soon</span>
         </div>
-        <button className="gold-button" onClick={() => setShowWithdrawForm((v) => !v)}>
-          Withdraw
-        </button>
-      </div>
+      ) : (
+        <>
+          <div className="glass-card" style={{ marginTop: 12 }}>
+            <span className="glass-card-icon round">📤</span>
+            <div className="glass-card-body">
+              <p className="glass-card-title">Withdraw</p>
+              <p className="glass-card-subtitle">Transfer balance to your wallet</p>
+            </div>
+            <button className="gold-button" onClick={() => setShowWithdrawForm((v) => !v)}>
+              Withdraw
+            </button>
+          </div>
 
-      {showWithdrawForm && (
-        <form onSubmit={handleSubmit} className="wallet-form">
-          <label>
-            TON wallet address
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value.trim())}
-              placeholder="EQ... or UQ..."
-            />
-            {address && !addressValid && <span className="field-error">Invalid TON address</span>}
-          </label>
+          {showWithdrawForm && (
+            <form onSubmit={handleSubmit} className="wallet-form">
+              <label>
+                TON wallet address
+                <input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value.trim())}
+                  placeholder="EQ... or UQ..."
+                />
+                {address && !addressValid && <span className="field-error">Invalid TON address</span>}
+              </label>
 
-          <label>
-            ADLX to withdraw (min {MIN_WITHDRAWAL_POINTS})
-            <input
-              type="number"
-              value={points}
-              onChange={(e) => setPoints(e.target.value)}
-              min={MIN_WITHDRAWAL_POINTS}
-              max={mainBalance}
-            />
-            {points && !amountValid && (
-              <span className="field-error">
-                Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
-              </span>
-            )}
-          </label>
+              <label>
+                ADLX to withdraw (min {MIN_WITHDRAWAL_POINTS})
+                <input
+                  type="number"
+                  value={points}
+                  onChange={(e) => setPoints(e.target.value)}
+                  min={MIN_WITHDRAWAL_POINTS}
+                  max={mainBalance}
+                />
+                {points && !amountValid && (
+                  <span className="field-error">
+                    Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
+                  </span>
+                )}
+              </label>
 
-          <button type="submit" disabled={!canSubmit}>
-            {submitting ? 'Submitting…' : 'Request withdrawal'}
-          </button>
-        </form>
+              <button type="submit" disabled={!canSubmit}>
+                {submitting ? 'Submitting…' : 'Request withdrawal'}
+              </button>
+            </form>
+          )}
+        </>
       )}
 
       {successMsg && <p className="wallet-success">{successMsg}</p>}
