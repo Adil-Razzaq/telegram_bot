@@ -121,6 +121,8 @@
       ADSGRAM_VERIFY_SECRET in .env):<br />
       • For the task-bar "Watch an Adsgram Ad" slot:<br />
       <code>https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_ADSGRAM_SECRET/daily_watch:adsgram?userid=[userId]</code><br />
+      • For the 7-Day Streak tab's "Watch Adsgram ad" button:<br />
+      <code>https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_ADSGRAM_SECRET/streak_watch:adsgram?userid=[userId]</code><br />
       • If "Network for reward actions" above is set to Adsgram (spin/miner/referral all share this ONE block,
       since Adsgram allows only one Reward Url per block — use the URL WITHOUT an action segment):<br />
       <code>https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_ADSGRAM_SECRET?userid=[userId]</code><br />
@@ -316,6 +318,13 @@
     monetag_zone_id: 'Monetag Zone ID',
     adsgram_block_id: 'Adsgram Block ID',
     monetag_task_reward_percent: 'Monetag watch-ad task: % of ad value paid to user',
+    streak_day_1_points: 'Streak: Day 1 reward (points)',
+    streak_day_2_points: 'Streak: Day 2 reward (points)',
+    streak_day_3_points: 'Streak: Day 3 reward (points)',
+    streak_day_4_points: 'Streak: Day 4 reward (points)',
+    streak_day_5_points: 'Streak: Day 5 reward (points)',
+    streak_day_6_points: 'Streak: Day 6 reward (points)',
+    streak_day_7_points: 'Streak: Day 7 reward (points)',
     adsgram_task_reward_points: 'Adsgram watch-ad task: fixed point reward',
     watch_ad_daily_limit_monetag: 'Monetag watch-ad task: daily limit',
     watch_ad_daily_limit_adsgram: 'Adsgram watch-ad task: daily limit',

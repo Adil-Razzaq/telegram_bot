@@ -15,6 +15,8 @@ const userRoutes = require('./routes/user');
 const minerRoutes = require('./routes/miner');
 const taskRoutes = require('./routes/tasks');
 const walletRoutes = require('./routes/wallet');
+const streakRoutes = require('./routes/streak');
+const leaderboardRoutes = require('./routes/leaderboard');
 
 const app = express();
 
@@ -69,6 +71,8 @@ app.use('/api/user', userRoutes);
 app.use('/api/miner', minerRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/streak', streakRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/bot', botRoutes);
 
 // Central error handler. In production, unexpected (non-statusCode) errors

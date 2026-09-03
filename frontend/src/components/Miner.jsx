@@ -2,6 +2,31 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { withConfirmationRetry } from '../monetag';
 import { showActionAd } from '../adNetwork';
+import { playNotificationSound } from '../sound';
+
+// Bridges the gap between "component just mounted, server hasn't
+// replied yet" and "server actually replied" — the exact window where a
+// closed-then-reopened Mini App used to visually flash back to zero.
+// Cached per-account so switching Telegram accounts on the same device
+// never shows someone else's cached progress.
+function miner_cache_key(telegramId) {
+  return `miner_status_cache_v1:${telegramId || 'anon'}`;
+}
+function loadCachedStatus(telegramId) {
+  try {
+    const raw = localStorage.getItem(miner_cache_key(telegramId));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+function saveCachedStatus(telegramId, status) {
+  try {
+    localStorage.setItem(miner_cache_key(telegramId), JSON.stringify(status));
+  } catch (e) {
+    // Storage can fail (private mode, quota) — never let it break mining.
+  }
+}
 
 function formatDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
@@ -24,14 +49,15 @@ export default function Miner({
   onConnectWallet,
   onDisconnectWallet,
 }) {
-  const [status, setStatus] = useState(null);
+  const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  const [status, setStatus] = useState(() => loadCachedStatus(telegramId));
   const [config, setConfig] = useState(null);
-  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(() => loadCachedStatus(telegramId)?.seconds_remaining_in_cycle ?? 0);
   // Live-ticking accrued amount — synced from the server on each poll,
   // then animated locally between polls using rate_per_second so it
   // reads as continuously moving (matching the mockup's pulsing
   // "+70.0379") without hitting the server every frame.
-  const [liveAccrued, setLiveAccrued] = useState(0);
+  const [liveAccrued, setLiveAccrued] = useState(() => loadCachedStatus(telegramId)?.accrued_now ?? 0);
   const [starting, setStarting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [boosting, setBoosting] = useState(false);
@@ -43,23 +69,43 @@ export default function Miner({
   const toastTimerRef = useRef(null);
   const syncRef = useRef({ accrued: 0, rate: 0, syncedAt: 0 });
 
-  async function refreshStatus() {
-    try {
-      const s = await api.minerStatus();
-      setStatus(s);
-      setSecondsLeft(s.seconds_remaining_in_cycle);
-      setLiveAccrued(s.accrued_now);
-      syncRef.current = { accrued: s.accrued_now, rate: s.rate_per_second, syncedAt: Date.now() };
-      setError(null);
-    } catch (e) {
-      setError(e.message);
+  // Retries a few times before giving up — a Mini App resuming from
+  // background often fires its very first network request into a
+  // still-waking-up connection (Telegram WebView reconnecting, a
+  // free-tier host waking from idle, etc.). Previously a single failed
+  // request here left `status` null forever (stuck on "Loading miner…")
+  // or, worse, let a stale local countdown of 0 sit on screen looking
+  // like mining had reset — this is what actually fixes that
+  // "close app, reopen, mining shows zero" glitch: keep trying instead
+  // of accepting the first failure as final.
+  async function refreshStatus({ attempts = 3, delayMs = 1000 } = {}) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const s = await api.minerStatus();
+        setStatus(s);
+        setSecondsLeft(s.seconds_remaining_in_cycle);
+        setLiveAccrued(s.accrued_now);
+        syncRef.current = { accrued: s.accrued_now, rate: s.rate_per_second, syncedAt: Date.now() };
+        saveCachedStatus(telegramId, s);
+        setError(null);
+        return;
+      } catch (e) {
+        if (i === attempts - 1) {
+          // Only surface the error if we have nothing at all to show —
+          // if a cached/previous status is already on screen, silently
+          // keep it rather than blowing away a working display.
+          if (!status) setError(e.message);
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
     }
   }
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch(() => {});
     refreshStatus();
-    pollRef.current = setInterval(refreshStatus, 15000);
+    pollRef.current = setInterval(() => refreshStatus({ attempts: 1 }), 15000);
     return () => clearInterval(pollRef.current);
   }, []);
 
@@ -97,6 +143,7 @@ export default function Miner({
       setSecondsLeft(result.seconds_remaining_in_cycle);
       setLiveAccrued(result.accrued_now);
       syncRef.current = { accrued: result.accrued_now, rate: result.rate_per_second, syncedAt: Date.now() };
+      saveCachedStatus(telegramId, result);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -118,6 +165,7 @@ export default function Miner({
       const result = await withConfirmationRetry(() => api.minerClaim(nonce));
       onBalanceChange(result.main_balance);
       showToast(result.earned_points);
+      playNotificationSound();
       await refreshStatus();
     } catch (e) {
       setError(e.message);
@@ -143,6 +191,7 @@ export default function Miner({
       setSecondsLeft(result.seconds_remaining_in_cycle);
       setLiveAccrued(result.accrued_now);
       syncRef.current = { accrued: result.accrued_now, rate: result.rate_per_second, syncedAt: Date.now() };
+      saveCachedStatus(telegramId, result);
     } catch (e) {
       setError(e.message);
     } finally {

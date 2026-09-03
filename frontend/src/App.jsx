@@ -5,6 +5,8 @@ import SpinWheel from './components/SpinWheel';
 import Friends from './components/Friends';
 import Wallet from './components/Wallet';
 import AutoAds from './components/AutoAds';
+import Streak from './components/Streak';
+import Leaderboard from './components/Leaderboard';
 import { api } from './api';
 import { initMonetag } from './monetag';
 import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from './tonConnect';
@@ -141,6 +143,8 @@ export default function App() {
           />
         )}
         {tab === 'tasks' && <Tasks onBalanceChange={setMainBalance} />}
+        {tab === 'streak' && <Streak onBalanceChange={setMainBalance} />}
+        {tab === 'leaderboard' && <Leaderboard />}
         {tab === 'spin' && config?.spin_enabled !== false && (
           <SpinWheel mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
@@ -167,6 +171,14 @@ export default function App() {
         <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>
           <span className="material-symbols-outlined">assignment</span>
           Tasks
+        </button>
+        <button className={tab === 'streak' ? 'active' : ''} onClick={() => setTab('streak')}>
+          <span className="material-symbols-outlined">local_fire_department</span>
+          Streak
+        </button>
+        <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>
+          <span className="material-symbols-outlined">leaderboard</span>
+          Ranks
         </button>
         {config?.spin_enabled !== false && (
           <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>

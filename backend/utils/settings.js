@@ -79,6 +79,18 @@ const SETTING_DEFS = {
   adsgram_task_reward_points: { type: 'number', default: 50, min: 0 },
   watch_ad_daily_limit_monetag: { type: 'number', default: 3, min: 0 },
   watch_ad_daily_limit_adsgram: { type: 'number', default: 3, min: 0 },
+
+  // --- 7-day streak rewards (points editable per day) ---
+  // Reward paid out for landing on day N of the 7-day cycle — see
+  // services/streakService.js. Escalating defaults so staying on
+  // streak actually pays off; every value is admin-editable here.
+  streak_day_1_points: { type: 'number', default: 10, min: 0 },
+  streak_day_2_points: { type: 'number', default: 20, min: 0 },
+  streak_day_3_points: { type: 'number', default: 30, min: 0 },
+  streak_day_4_points: { type: 'number', default: 40, min: 0 },
+  streak_day_5_points: { type: 'number', default: 60, min: 0 },
+  streak_day_6_points: { type: 'number', default: 80, min: 0 },
+  streak_day_7_points: { type: 'number', default: 150, min: 0 },
 };
 
 // Flat key -> default value, kept for backward compatibility with code

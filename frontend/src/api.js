@@ -57,4 +57,8 @@ export const api = {
   adWatchStatus: () => apiCall('/tasks/ad-watch/status'),
   prepareAdWatch: (network) => apiCall('/tasks/ad-watch/prepare', { method: 'POST', body: { network } }),
   claimAdWatch: (network, nonce) => apiCall('/tasks/ad-watch/claim', { method: 'POST', body: { network, nonce } }),
+  streakStatus: () => apiCall('/streak/status'),
+  prepareStreak: (network) => apiCall('/streak/prepare', { method: 'POST', body: { network } }),
+  claimStreak: (network, nonce) => apiCall('/streak/claim', { method: 'POST', body: { network, nonce } }),
+  leaderboard: () => apiCall('/leaderboard'),
 };

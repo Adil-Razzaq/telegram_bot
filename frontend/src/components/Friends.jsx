@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { withConfirmationRetry } from '../monetag';
 import { showActionAd } from '../adNetwork';
+import { playNotificationSound } from '../sound';
 
 const COOLDOWN_SECONDS = 60;
 
@@ -76,6 +77,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
       const claimResult = await withConfirmationRetry(() => api.claimReferral(nonce));
       setStatus((prev) => ({ ...prev, ...claimResult }));
       onBalanceChange(claimResult.main_balance);
+      playNotificationSound();
       setSecondsLeft(COOLDOWN_SECONDS);
       await refreshStatus();
     } catch (e) {
