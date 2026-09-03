@@ -1,5 +1,5 @@
 const { client } = require('../db/db');
-const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
@@ -167,11 +167,11 @@ async function prepareAdTask({ telegramId, taskId }) {
     err.statusCode = 409;
     throw err;
   }
-  return startAdEvent({ telegramId, action: `ad_task:${taskId}` });
+  return startAdEventIfRequired({ telegramId, action: `ad_task:${taskId}` });
 }
 
 async function claimAdTask({ telegramId, taskId, nonce }) {
-  await consumeAdEvent({ nonce, telegramId, action: `ad_task:${taskId}` });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: `ad_task:${taskId}` });
 
   const taskRes = await client.execute({
     sql: "SELECT * FROM tasks WHERE id = ? AND active = 1 AND task_type = 'watch_ad'",

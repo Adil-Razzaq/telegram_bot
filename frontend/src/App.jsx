@@ -4,8 +4,9 @@ import Tasks from './components/Tasks';
 import SpinWheel from './components/SpinWheel';
 import Friends from './components/Friends';
 import Wallet from './components/Wallet';
+import AutoAds from './components/AutoAds';
 import { api } from './api';
-import { enableInAppInterstitial } from './monetag';
+import { initMonetag } from './monetag';
 import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from './tonConnect';
 import './styles/app.css';
 
@@ -15,6 +16,11 @@ export default function App() {
   const [balanceLoaded, setBalanceLoaded] = useState(false);
   const [telegramId, setTelegramId] = useState(null);
   const [displayName, setDisplayName] = useState(null);
+  // Full /user/config payload — settings (ad zones/timing/limits) plus
+  // the withdrawals and spin_enabled feature flags. AutoAds and the
+  // Spin nav tab both read straight off this rather than duplicating
+  // their own fetches.
+  const [config, setConfig] = useState(null);
 
   // Lifted here (rather than duplicated in Miner + Wallet separately) so
   // both the Mine-tab header and the Profile page always agree on
@@ -73,7 +79,20 @@ export default function App() {
       })
       .catch(() => {});
 
-    enableInAppInterstitial();
+    api
+      .getConfig()
+      .then((cfg) => {
+        setConfig(cfg);
+        // Rewarded ads (spin/miner/referral/tasks + the Monetag daily
+        // watch-ad slot) always need Monetag loaded, regardless of which
+        // network the passive auto-ad is set to — so this always runs,
+        // not just when auto_ad_network === 'monetag'.
+        initMonetag(cfg.monetag_zone_id).catch((e) => console.error(e.message));
+        // If the admin turned Spin off while a user already had that
+        // tab open, don't strand them on a tab that's about to vanish.
+        if (!cfg.spin_enabled) setTab((t) => (t === 'spin' ? 'miner' : t));
+      })
+      .catch(() => {});
   }, []);
 
   async function handleConnectWallet() {
@@ -111,6 +130,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <AutoAds config={config} />
       <main className="app-main">
         {tab === 'miner' && (
           <Miner
@@ -121,7 +141,7 @@ export default function App() {
           />
         )}
         {tab === 'tasks' && <Tasks onBalanceChange={setMainBalance} />}
-        {tab === 'spin' && (
+        {tab === 'spin' && config?.spin_enabled !== false && (
           <SpinWheel mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
         {tab === 'friends' && (
@@ -148,10 +168,12 @@ export default function App() {
           <span className="material-symbols-outlined">assignment</span>
           Tasks
         </button>
-        <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
-          <span className="material-symbols-outlined">casino</span>
-          Spin
-        </button>
+        {config?.spin_enabled !== false && (
+          <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
+            <span className="material-symbols-outlined">casino</span>
+            Spin
+          </button>
+        )}
         <button className={tab === 'friends' ? 'active' : ''} onClick={() => setTab('friends')}>
           <span className="material-symbols-outlined">group</span>
           Friends

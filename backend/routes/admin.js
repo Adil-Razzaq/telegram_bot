@@ -3,7 +3,7 @@ const { adminAuth } = require('../middleware/adminAuth');
 const { sendTelegramMessage } = require('../utils/telegram');
 const { client } = require('../db/db');
 const { createTask, listAllTasksAdmin, setTaskActive, updateTask, deleteTask } = require('../services/taskService');
-const { getAllSettings, setSetting, DEFAULTS } = require('../utils/settings');
+const { getAllSettings, setSetting, DEFAULTS, SETTING_DEFS } = require('../utils/settings');
 const { getAllFlags, setFlag, KNOWN_FLAGS } = require('../utils/featureFlags');
 const { getAllBotContent, setBotContent, DEFAULTS: BOT_CONTENT_DEFAULTS } = require('../utils/botContent');
 const {
@@ -197,7 +197,12 @@ router.delete('/tasks/:id', async (req, res) => {
 // reward, miner timing/payout) in one place.
 router.get('/settings', async (req, res) => {
   try {
-    res.json({ ok: true, settings: await getAllSettings({ forceRefresh: true }), known_keys: Object.keys(DEFAULTS) });
+    res.json({
+      ok: true,
+      settings: await getAllSettings({ forceRefresh: true }),
+      known_keys: Object.keys(DEFAULTS),
+      setting_defs: SETTING_DEFS, // {key: {type, default, min?, max?, options?}} — admin.html uses this to render the right input per key
+    });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

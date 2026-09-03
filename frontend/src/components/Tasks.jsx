@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { showRewardedAd, withConfirmationRetry } from '../monetag';
+import { showAdsgramRewardedAd } from '../adsgram';
 
 // Existing tasks store emoji icons (e.g. "🐦"); the new design uses
 // Material Symbols ligature names (e.g. "chat_bubble"). This renders
@@ -18,6 +19,26 @@ export default function Tasks({ onBalanceChange }) {
   const [claimingId, setClaimingId] = useState(null);
   const [error, setError] = useState(null);
 
+  // The two fixed daily watch-ad slots (Monetag + Adsgram) — separate
+  // from the admin-created `tasks` list above, since these are
+  // repeatable daily rather than one-time. Hidden entirely if
+  // action_ads_enabled is off (there's no such thing as a watch-ad
+  // task with no ad), and the Adsgram card specifically is hidden if
+  // no adsgram_block_id has been set yet in the admin panel.
+  const [config, setConfig] = useState(null);
+  const [adWatchStatus, setAdWatchStatus] = useState(null);
+  const [watchingNetwork, setWatchingNetwork] = useState(null);
+
+  async function refreshAdWatch() {
+    try {
+      const [cfg, status] = await Promise.all([api.getConfig(), api.adWatchStatus()]);
+      setConfig(cfg);
+      setAdWatchStatus(status.status);
+    } catch (e) {
+      // Non-fatal — the rest of Tasks still works if this fails.
+    }
+  }
+
   async function refresh() {
     try {
       const res = await api.taskList();
@@ -29,6 +50,7 @@ export default function Tasks({ onBalanceChange }) {
 
   useEffect(() => {
     refresh();
+    refreshAdWatch();
   }, []);
 
   function handleGo(task) {
@@ -62,7 +84,7 @@ export default function Tasks({ onBalanceChange }) {
     setError(null);
     try {
       const { nonce } = await api.prepareAdTask(task.id);
-      await showRewardedAd(nonce);
+      if (nonce) await showRewardedAd(nonce);
       const result = await withConfirmationRetry(() => api.claimAdTask(task.id, nonce));
       onBalanceChange(result.main_balance);
       await refresh();
@@ -70,6 +92,28 @@ export default function Tasks({ onBalanceChange }) {
       setError(e.message);
     } finally {
       setClaimingId(null);
+    }
+  }
+
+  // The two fixed daily slots. Same nonce -> show ad -> confirm-and-spend
+  // pattern as everything else, just against the ad-watch endpoints
+  // instead of a specific task row.
+  async function handleWatchDailyAd(network) {
+    setWatchingNetwork(network);
+    setError(null);
+    try {
+      const { nonce } = await api.prepareAdWatch(network);
+      if (nonce) {
+        if (network === 'monetag') await showRewardedAd(nonce);
+        else await showAdsgramRewardedAd(config.adsgram_block_id);
+      }
+      const result = await withConfirmationRetry(() => api.claimAdWatch(network, nonce));
+      onBalanceChange(result.main_balance);
+      await refreshAdWatch();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setWatchingNetwork(null);
     }
   }
 
@@ -89,6 +133,60 @@ export default function Tasks({ onBalanceChange }) {
       </div>
 
       {tasks.length === 0 && <p className="tasks-empty">No tasks available right now.</p>}
+
+      {config?.action_ads_enabled !== false && adWatchStatus && (
+        <div className="tasks-list">
+          <div className="task-card">
+            <span className="task-icon">
+              <span className="material-symbols-outlined">smart_display</span>
+            </span>
+            <div className="task-info">
+              <span className="task-title">Watch a Monetag Ad</span>
+              <span className="task-reward">
+                {adWatchStatus.monetag.reward_percent}% of ad value · {adWatchStatus.monetag.watched_today}/
+                {adWatchStatus.monetag.daily_limit} today
+              </span>
+            </div>
+            <button
+              className="task-button task-button-claim"
+              onClick={() => handleWatchDailyAd('monetag')}
+              disabled={watchingNetwork === 'monetag' || !adWatchStatus.monetag.can_watch}
+            >
+              {watchingNetwork === 'monetag'
+                ? '…'
+                : adWatchStatus.monetag.can_watch
+                ? 'Watch ad'
+                : 'Come back tomorrow'}
+            </button>
+          </div>
+
+          {config.adsgram_block_id && (
+            <div className="task-card">
+              <span className="task-icon">
+                <span className="material-symbols-outlined">smart_display</span>
+              </span>
+              <div className="task-info">
+                <span className="task-title">Watch an Adsgram Ad</span>
+                <span className="task-reward">
+                  +{adWatchStatus.adsgram.reward_points} ADLX · {adWatchStatus.adsgram.watched_today}/
+                  {adWatchStatus.adsgram.daily_limit} today
+                </span>
+              </div>
+              <button
+                className="task-button task-button-claim"
+                onClick={() => handleWatchDailyAd('adsgram')}
+                disabled={watchingNetwork === 'adsgram' || !adWatchStatus.adsgram.can_watch}
+              >
+                {watchingNetwork === 'adsgram'
+                  ? '…'
+                  : adWatchStatus.adsgram.can_watch
+                  ? 'Watch ad'
+                  : 'Come back tomorrow'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="tasks-list">
         {tasks.map((task) => (

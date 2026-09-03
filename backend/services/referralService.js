@@ -1,5 +1,5 @@
 const { client, rolloverUserRefCounterIfNeeded } = require('../db/db');
-const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getSetting } = require('../utils/settings');
 
 // Default 100 pts/claim (utils/settings.js) — tunable live via the admin
@@ -68,13 +68,13 @@ async function grantReferral({ referrerId, referredTelegramId }) {
 }
 
 async function prepareClaim({ telegramId }) {
-  return startAdEvent({ telegramId, action: 'referral_claim' });
+  return startAdEventIfRequired({ telegramId, action: 'referral_claim' });
 }
 
 async function claimReferral({ telegramId, nonce }) {
   const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
   await rolloverUserRefCounterIfNeeded(telegramId);
-  await consumeAdEvent({ nonce, telegramId, action: 'referral_claim' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'referral_claim' });
 
   const tx = await client.transaction('write');
   try {

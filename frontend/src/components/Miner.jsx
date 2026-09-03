@@ -85,7 +85,7 @@ export default function Miner({
     setError(null);
     try {
       const { nonce } = await api.prepareMinerStart();
-      await showRewardedAd(nonce);
+      if (nonce) await showRewardedAd(nonce);
       const result = await withConfirmationRetry(() => api.startMiner(nonce));
       setStatus(result);
       setSecondsLeft(result.seconds_remaining_in_cycle);
@@ -108,7 +108,7 @@ export default function Miner({
     setError(null);
     try {
       const { nonce } = await api.prepareMinerClaim();
-      await showRewardedAd(nonce);
+      if (nonce) await showRewardedAd(nonce);
       const result = await withConfirmationRetry(() => api.minerClaim(nonce));
       onBalanceChange(result.main_balance);
       showToast(result.earned_points);

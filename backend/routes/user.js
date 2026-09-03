@@ -29,8 +29,12 @@ router.get('/me', telegramAuth, async (req, res) => {
 // Withdraw button, without a separate round-trip.
 router.get('/config', telegramAuth, async (req, res) => {
   try {
-    const [settings, withdrawalsFlag] = await Promise.all([getAllSettings(), getFlag('withdrawals')]);
-    res.json({ ok: true, ...settings, withdrawals: withdrawalsFlag });
+    const [settings, withdrawalsFlag, spinFlag] = await Promise.all([
+      getAllSettings(),
+      getFlag('withdrawals'),
+      getFlag('spin'),
+    ]);
+    res.json({ ok: true, ...settings, withdrawals: withdrawalsFlag, spin_enabled: spinFlag.enabled });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

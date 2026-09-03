@@ -199,4 +199,20 @@ CREATE TABLE IF NOT EXISTS bot_content (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ADDED: the two fixed, always-present "watch an ad" task-bar slots
+-- (one Monetag, one Adsgram) — repeatable daily up to
+-- watch_ad_daily_limit_monetag/adsgram (Settings), unlike the
+-- one-time-per-row `tasks` table above. Not a row in `tasks` because
+-- those are admin-created and one-time-per-user by design (task_type
+-- 'watch_ad' there still works the old way for anyone using it); these
+-- two are system slots with their own daily-reset counter. See
+-- services/adWatchService.js.
+CREATE TABLE IF NOT EXISTS daily_ad_watch_state (
+    telegram_id INTEGER NOT NULL,
+    network TEXT NOT NULL CHECK(network IN ('monetag', 'adsgram')),
+    watch_date TEXT NOT NULL, -- 'YYYY-MM-DD', UTC calendar day
+    watch_count INTEGER DEFAULT 0,
+    PRIMARY KEY (telegram_id, network, watch_date)
+);
+
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

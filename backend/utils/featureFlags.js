@@ -22,6 +22,15 @@ const KNOWN_FLAGS = {
     // couple of words.
     defaultMessage: 'Coming Soon',
   },
+  // Unlike withdrawals (shown disabled with a message), the Spin tab is
+  // fully removed from nav when this is off — see App.jsx, which reads
+  // this flag from /user/config and doesn't render the tab at all. The
+  // message field still exists for consistency with the flag system but
+  // isn't shown anywhere for this one.
+  spin: {
+    defaultEnabled: true,
+    defaultMessage: '',
+  },
 };
 
 const CACHE_MS = 10000; // shorter than settings.js — a flag flip during an actual emergency shouldn't take 15s to propagate

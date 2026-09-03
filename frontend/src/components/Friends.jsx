@@ -67,7 +67,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
     setClaiming(true);
     try {
       const { nonce } = await api.prepareClaim();
-      await showRewardedAd(nonce);
+      if (nonce) await showRewardedAd(nonce);
       const claimResult = await withConfirmationRetry(() => api.claimReferral(nonce));
       setStatus((prev) => ({ ...prev, ...claimResult }));
       onBalanceChange(claimResult.main_balance);

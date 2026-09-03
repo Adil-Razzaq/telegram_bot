@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { client } = require('../db/db');
 const { grantReferral } = require('../services/referralService');
-const { confirmAdEvent } = require('../utils/monetagAds');
+const { confirmAdEvent, confirmOldestPendingByUser } = require('../utils/monetagAds');
 const { getAllBotContent } = require('../utils/botContent');
 
 const router = express.Router();
@@ -169,6 +169,52 @@ router.get('/monetag-postback/:secret', async (req, res) => {
 
   // Always 200 — a non-paid event (filtered/fraud) or missing nonce isn't
   // an error, just nothing to confirm. Monetag retries on non-200.
+  res.sendStatus(200);
+});
+
+// Adsgram calls this after a user watches an ad — set this exact URL as
+// the "Reward Url" for the relevant block in your Adsgram partner
+// dashboard (https://partner.adsgram.ai/), one per action you gate with
+// Adsgram (e.g. one block for the watch-ad task, a separate block if you
+// ever gate something else with it):
+//
+//   https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_SECRET/adsgram_task?userid=[userId]
+//
+// Per Adsgram's own docs this is the ENTIRE payload they send — a GET
+// with only [userId] substituted, no nonce, no ad value. `:action` is a
+// literal path segment WE chose (not an Adsgram macro) so one route can
+// serve multiple gated actions without ambiguity — see
+// confirmOldestPendingByUser in utils/monetagAds.js for how confirmation
+// is matched without a nonce.
+router.get('/adsgram-postback/:secret/:action', async (req, res) => {
+  const expected = process.env.ADSGRAM_VERIFY_SECRET || '';
+  const provided = req.params.secret || '';
+  const same =
+    Buffer.byteLength(provided) === Buffer.byteLength(expected) &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  if (!expected || !same) return res.sendStatus(404);
+
+  const { action } = req.params;
+  const telegramId = Number(req.query.userid);
+
+  console.log('Adsgram postback received:', { action, userid: req.query.userid });
+
+  let matched = false;
+  if (Number.isInteger(telegramId)) {
+    matched = await confirmOldestPendingByUser({ telegramId, action });
+    console.log('Postback confirmOldestPendingByUser result:', matched);
+  }
+
+  try {
+    await client.execute({
+      sql: `INSERT INTO ad_postback_log (network, telegram_id_macro, event_type, matched_pending_event)
+            VALUES ('adsgram', ?, ?, ?)`,
+      args: [req.query.userid || null, action, matched ? 1 : 0],
+    });
+  } catch (err) {
+    console.error('Failed to write ad_postback_log:', err);
+  }
+
   res.sendStatus(200);
 });
 

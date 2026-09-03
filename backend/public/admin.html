@@ -110,10 +110,17 @@
 
   <h2>Settings</h2>
   <div class="card">
-    <p class="muted">Every admin-tunable number in the app. Changes take effect within ~15 seconds, no deploy needed.</p>
+    <p class="muted">Every admin-tunable value in the app. Changes take effect within ~15 seconds, no deploy needed.</p>
     <div id="settingsFields">Loading…</div>
     <button onclick="saveSettings()" style="margin-top:8px">Save Settings</button>
     <div id="settingsStatus" class="status-msg"></div>
+    <p class="muted" style="margin-top:14px; padding-top:14px; border-top:1px solid #222">
+      After setting an Adsgram Block ID above, go to your
+      <a href="https://partner.adsgram.ai/" target="_blank" rel="noopener">Adsgram partner dashboard</a>
+      → that block's Reward Url, and set it to (replace YOUR_DOMAIN and YOUR_ADSGRAM_SECRET with your real values from .env's ADSGRAM_VERIFY_SECRET):<br />
+      <code>https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_ADSGRAM_SECRET/daily_watch:adsgram?userid=[userId]</code><br />
+      Monetag's Postback URL (set per-zone in their dashboard) stays exactly as configured before — it isn't affected by any setting on this page.
+    </p>
   </div>
 
   <h2>Feature Flags</h2>
@@ -281,16 +288,57 @@
     miner_daily_points: 'Miner: total points/day',
     miner_cycles_per_day: 'Miner: cycles/day',
     miner_cycle_hours: 'Miner: hours/cycle',
+    spin_entry_fee: 'Spin: entry fee (points)',
+    spin_free_spins: 'Spin: free spins for new users',
+    spin_payout_1: 'Spin: payout slot 1',
+    spin_payout_2: 'Spin: payout slot 2',
+    spin_payout_3: 'Spin: payout slot 3',
+    spin_payout_4: 'Spin: payout slot 4',
+    spin_payout_5: 'Spin: payout slot 5',
+    spin_payout_6: 'Spin: payout slot 6',
+    action_ads_enabled: 'Require an ad for reward actions (spin/miner/referral/tasks)',
+    auto_ad_enabled: 'Passive auto-ad enabled',
+    auto_ad_network: 'Auto-ad network',
+    auto_ad_first_delay_seconds: 'Auto-ad: first show, seconds after app open',
+    auto_ad_interval_seconds: 'Auto-ad: repeat interval (seconds)',
+    auto_ad_frequency: 'Auto-ad: max shows per capping window (Monetag only)',
+    auto_ad_capping_hours: 'Auto-ad: capping window, hours (Monetag only)',
+    monetag_zone_id: 'Monetag Zone ID',
+    adsgram_block_id: 'Adsgram Block ID',
+    monetag_task_reward_percent: 'Monetag watch-ad task: % of ad value paid to user',
+    adsgram_task_reward_points: 'Adsgram watch-ad task: fixed point reward',
+    watch_ad_daily_limit_monetag: 'Monetag watch-ad task: daily limit',
+    watch_ad_daily_limit_adsgram: 'Adsgram watch-ad task: daily limit',
   };
+
+  let lastSettingDefs = {}; // populated by loadSettings, read by saveSettings
+
+  function renderSettingInput(key, def, value) {
+    const id = 'setting-' + key;
+    if (def.type === 'boolean') {
+      return `<label style="display:flex; align-items:center; gap:8px">
+        <input type="checkbox" id="${id}" ${value ? 'checked' : ''} style="width:auto" /> ${SETTINGS_LABELS[key] || key}
+      </label>`;
+    }
+    if (def.type === 'enum') {
+      const opts = def.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
+      return `<label>${SETTINGS_LABELS[key] || key}</label><select id="${id}">${opts}</select>`;
+    }
+    if (def.type === 'string') {
+      return `<label>${SETTINGS_LABELS[key] || key}</label><input id="${id}" type="text" value="${value ?? ''}" />`;
+    }
+    // number
+    const minAttr = def.min !== undefined ? `min="${def.min}"` : '';
+    const maxAttr = def.max !== undefined ? `max="${def.max}"` : '';
+    return `<label>${SETTINGS_LABELS[key] || key}</label><input id="${id}" type="number" step="any" ${minAttr} ${maxAttr} value="${value}" />`;
+  }
 
   async function loadSettings() {
     const el = document.getElementById('settingsFields');
     try {
-      const { settings, known_keys } = await adminFetch('/admin/settings');
-      el.innerHTML = known_keys.map((key) => `
-        <label>${SETTINGS_LABELS[key] || key}</label>
-        <input id="setting-${key}" type="number" value="${settings[key]}" />
-      `).join('');
+      const { settings, known_keys, setting_defs } = await adminFetch('/admin/settings');
+      lastSettingDefs = setting_defs;
+      el.innerHTML = known_keys.map((key) => renderSettingInput(key, setting_defs[key], settings[key])).join('');
     } catch (e) {
       el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
     }
@@ -301,9 +349,13 @@
     statusEl.textContent = '';
     try {
       const body = {};
-      Object.keys(SETTINGS_LABELS).forEach((key) => {
+      Object.keys(lastSettingDefs).forEach((key) => {
         const input = document.getElementById('setting-' + key);
-        if (input) body[key] = Number(input.value);
+        if (!input) return;
+        const def = lastSettingDefs[key];
+        if (def.type === 'boolean') body[key] = input.checked;
+        else if (def.type === 'number') body[key] = Number(input.value);
+        else body[key] = input.value; // string | enum
       });
       await adminFetch('/admin/settings', { method: 'POST', body: JSON.stringify(body) });
       statusEl.textContent = 'Saved — applies within ~15 seconds.';
@@ -314,7 +366,7 @@
     }
   }
 
-  const FLAG_LABELS = { withdrawals: 'Withdrawals' };
+  const FLAG_LABELS = { withdrawals: 'Withdrawals', spin: 'Spin Wheel tab (hidden entirely when off)' };
 
   async function loadFlags() {
     const el = document.getElementById('flagsFields');

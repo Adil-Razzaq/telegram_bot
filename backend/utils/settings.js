@@ -1,45 +1,97 @@
 const { client } = require('../db/db');
 
 /**
- * Every number in this app that a real operator would want to tune
- * without a code deploy lives here: point value, reward amounts, miner
- * timing. Cached for CACHE_MS so a settings change via the admin panel
- * takes up to that long to apply everywhere — a reasonable trade for not
- * hitting the database on every single spin/claim/miner-tick.
+ * Every tunable in this app that a real operator would want to change
+ * without a code deploy lives here — not just numbers anymore. Each
+ * entry in SETTING_DEFS declares its own type so getAllSettings() can
+ * cast DB values (always stored as TEXT) back to the right JS type, and
+ * setSetting() can validate incoming values correctly per type instead
+ * of assuming everything is a positive number.
+ *
+ * Cached for CACHE_MS so a settings change via the admin panel takes up
+ * to that long to apply everywhere — unchanged from before.
  */
 
 const CACHE_MS = 15000;
 let cache = null;
 let cacheAt = 0;
 
-const DEFAULTS = {
-  points_per_usd: 10000, // 10,000 points = $1
-  referral_reward: 100, // points granted to the referrer per successful ad-watched claim
-  miner_daily_points: 150, // total points available from the miner per day, across all cycles
-  miner_cycles_per_day: 4,
-  miner_cycle_hours: 6, // 4 x 6 = a full 24h day, by design — see minerService.js
-  spin_entry_fee: 100, // charged per spin once free spins are used up
-  spin_free_spins: 3, // first N spins for a new user skip the entry fee (still requires watching an ad)
-  spin_payout_1: 10,
-  spin_payout_2: 20,
-  spin_payout_3: 50,
-  spin_payout_4: 100,
-  spin_payout_5: 200,
-  spin_payout_6: 500,
+const SETTING_DEFS = {
+  points_per_usd: { type: 'number', default: 10000, min: 0.0001 }, // 10,000 points = $1
+  referral_reward: { type: 'number', default: 100, min: 0 }, // points granted to the referrer per successful ad-watched claim
+  miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
+  miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
+  miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js
+  spin_entry_fee: { type: 'number', default: 100, min: 0 }, // charged per spin once free spins are used up
+  spin_free_spins: { type: 'number', default: 3, min: 0 }, // first N spins for a new user skip the entry fee (still requires watching an ad)
+  spin_payout_1: { type: 'number', default: 10, min: 0 },
+  spin_payout_2: { type: 'number', default: 20, min: 0 },
+  spin_payout_3: { type: 'number', default: 50, min: 0 },
+  spin_payout_4: { type: 'number', default: 100, min: 0 },
+  spin_payout_5: { type: 'number', default: 200, min: 0 },
+  spin_payout_6: { type: 'number', default: 500, min: 0 },
+
+  // --- Ad controls (added for admin-managed ads) ---
+
+  // Master switch for every reward-gated ad (spin, miner start, miner
+  // claim, referral claim, task claim, watch-ad tasks). When off, those
+  // actions proceed WITHOUT requiring an ad — see each service's use of
+  // this flag before calling startAdEvent/consumeAdEvent.
+  action_ads_enabled: { type: 'boolean', default: true },
+
+  // Passive auto-ad (Monetag In-App Interstitial or Adsgram shown on a
+  // timer) — see frontend/src/components/AutoAds.jsx.
+  auto_ad_enabled: { type: 'boolean', default: true },
+  auto_ad_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
+  auto_ad_first_delay_seconds: { type: 'number', default: 30, min: 1 },
+  auto_ad_interval_seconds: { type: 'number', default: 45, min: 1 },
+  // Monetag-only auto-ad tuning (Adsgram has no equivalent frequency-cap
+  // API — its auto-ad is just shown on our own timer, see AutoAds.jsx).
+  auto_ad_frequency: { type: 'number', default: 6, min: 1 },
+  auto_ad_capping_hours: { type: 'number', default: 1, min: 0.1 },
+
+  // Zone/Block IDs — editable here instead of hardcoded in frontend env
+  // vars, so they can change without a frontend redeploy.
+  monetag_zone_id: { type: 'string', default: '11654422' },
+  adsgram_block_id: { type: 'string', default: '' },
+
+  // Task-bar watch-ad rewards & limits — one Monetag task (revenue-
+  // based, see taskService.js) and one Adsgram task (fixed points, since
+  // Adsgram's Reward Url carries no ad-value — see monetagAds.js).
+  monetag_task_reward_percent: { type: 'number', default: 50, min: 0, max: 100 },
+  adsgram_task_reward_points: { type: 'number', default: 50, min: 0 },
+  watch_ad_daily_limit_monetag: { type: 'number', default: 3, min: 0 },
+  watch_ad_daily_limit_adsgram: { type: 'number', default: 3, min: 0 },
 };
+
+// Flat key -> default value, kept for backward compatibility with code
+// that only needs default values or the list of known keys (e.g.
+// routes/admin.js's `known_keys: Object.keys(DEFAULTS)`).
+const DEFAULTS = Object.fromEntries(Object.entries(SETTING_DEFS).map(([k, d]) => [k, d.default]));
+
+function castValue(key, rawText) {
+  const def = SETTING_DEFS[key];
+  if (rawText === undefined) return def.default;
+  if (def.type === 'boolean') return rawText === '1' || rawText === 'true';
+  if (def.type === 'number') return Number(rawText);
+  return rawText; // 'string' | 'enum'
+}
+
+function encodeValue(key, value) {
+  const def = SETTING_DEFS[key];
+  if (def.type === 'boolean') return value ? '1' : '0';
+  if (def.type === 'number') return String(value);
+  return String(value);
+}
 
 async function loadAll() {
   const res = await client.execute('SELECT key, value FROM settings');
   const fromDb = {};
   for (const row of res.rows) fromDb[row.key] = row.value;
-  const merged = { ...DEFAULTS, ...fromDb };
-  // Values from the DB arrive as TEXT; DEFAULTS are already numbers. Without
-  // this, a setting that's never been edited stays a number while one
-  // that HAS been edited becomes a string — inconsistent depending on
-  // edit history, which is exactly the kind of thing that silently breaks
-  // strict comparisons and JSON consumers downstream.
   const normalized = {};
-  for (const [key, value] of Object.entries(merged)) normalized[key] = Number(value);
+  for (const key of Object.keys(SETTING_DEFS)) {
+    normalized[key] = castValue(key, fromDb[key]);
+  }
   return normalized;
 }
 
@@ -52,28 +104,65 @@ async function getAllSettings({ forceRefresh = false } = {}) {
 
 async function getSetting(key) {
   const all = await getAllSettings();
-  const raw = all[key];
-  return raw === undefined ? undefined : Number(raw);
+  return all[key];
 }
 
 async function setSetting(key, value) {
-  if (!(key in DEFAULTS)) {
-    const err = new Error(`Unknown setting key: ${key}. Known keys: ${Object.keys(DEFAULTS).join(', ')}`);
+  const def = SETTING_DEFS[key];
+  if (!def) {
+    const err = new Error(`Unknown setting key: ${key}. Known keys: ${Object.keys(SETTING_DEFS).join(', ')}`);
     err.statusCode = 400;
     throw err;
   }
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) {
-    const err = new Error(`Setting ${key} must be a positive number`);
-    err.statusCode = 400;
-    throw err;
+
+  if (def.type === 'boolean') {
+    const truthy = value === true || value === '1' || value === 'true' || value === 1;
+    const falsy = value === false || value === '0' || value === 'false' || value === 0;
+    if (!truthy && !falsy) {
+      const err = new Error(`Setting ${key} must be a boolean (true/false)`);
+      err.statusCode = 400;
+      throw err;
+    }
+    await writeSetting(key, encodeValue(key, truthy));
+  } else if (def.type === 'number') {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      const err = new Error(`Setting ${key} must be a number`);
+      err.statusCode = 400;
+      throw err;
+    }
+    if (def.min !== undefined && num < def.min) {
+      const err = new Error(`Setting ${key} must be >= ${def.min}`);
+      err.statusCode = 400;
+      throw err;
+    }
+    if (def.max !== undefined && num > def.max) {
+      const err = new Error(`Setting ${key} must be <= ${def.max}`);
+      err.statusCode = 400;
+      throw err;
+    }
+    await writeSetting(key, encodeValue(key, num));
+  } else if (def.type === 'enum') {
+    if (!def.options.includes(value)) {
+      const err = new Error(`Setting ${key} must be one of: ${def.options.join(', ')}`);
+      err.statusCode = 400;
+      throw err;
+    }
+    await writeSetting(key, encodeValue(key, value));
+  } else {
+    // 'string' — zone/block IDs etc. Trimmed, no other constraint (an
+    // empty string is valid — e.g. adsgram_block_id before it's set).
+    await writeSetting(key, encodeValue(key, String(value).trim()));
   }
+}
+
+async function writeSetting(key, encoded) {
   await client.execute({
     sql: `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
-    args: [key, String(num)],
+    args: [key, encoded],
   });
   await getAllSettings({ forceRefresh: true });
 }
 
-module.exports = { getAllSettings, getSetting, setSetting, DEFAULTS };
+module.exports = { getAllSettings, getSetting, setSetting, DEFAULTS, SETTING_DEFS };

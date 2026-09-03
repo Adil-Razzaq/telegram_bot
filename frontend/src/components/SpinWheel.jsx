@@ -69,7 +69,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
     setSpinning(true);
     try {
       const { nonce } = await api.prepareSpin();
-      await showRewardedAd(nonce);
+      if (nonce) await showRewardedAd(nonce);
       const result = await withConfirmationRetry(() => api.playSpin(nonce));
 
       const targetIndex = segments.findIndex((s) => s.index === result.segment_index);

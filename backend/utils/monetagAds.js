@@ -100,4 +100,54 @@ async function consumeAdEvent({ nonce, telegramId, action }) {
   return event;
 }
 
-module.exports = { startAdEvent, confirmAdEvent, consumeAdEvent };
+// Adsgram's server-side "Reward Url" has no nonce/custom-param support —
+// per their docs it's a plain GET with only the Telegram user ID
+// substituted in. So instead of matching an exact nonce (confirmAdEvent
+// above), this confirms the OLDEST still-pending event for this exact
+// user+action. Safe under normal single-tab use (a user only has one
+// truly pending Adsgram ad-watch at a time); the tradeoff, same class as
+// the one already noted in playSpin, is a user rapid-firing multiple
+// tabs could in theory confirm out of order — not exploitable for extra
+// reward, just a possible UX mixup, so acceptable here.
+async function confirmOldestPendingByUser({ telegramId, action, estimatedPrice = 0 }) {
+  const res = await client.execute({
+    sql: `SELECT nonce FROM pending_ad_events
+          WHERE telegram_id = ? AND action = ? AND status = 'pending'
+            AND created_at >= datetime('now', '-${NONCE_TTL_MINUTES} minutes')
+          ORDER BY created_at ASC LIMIT 1`,
+    args: [telegramId, action],
+  });
+  const row = res.rows[0];
+  if (!row) return false;
+  return confirmAdEvent({ nonce: row.nonce, estimatedPrice });
+}
+
+const { getAllSettings } = require('./settings');
+
+// Every reward-gated action (spin, miner start/claim, referral claim,
+// task claim, watch-ad tasks) goes through these two instead of calling
+// startAdEvent/consumeAdEvent directly, so the admin's single
+// action_ads_enabled switch (Settings panel) affects all of them at
+// once. When off, prepare returns null (frontend skips showRewardedAd
+// entirely — see each component's handleX function) and consume is a
+// no-op (nothing to verify, the ad requirement is off).
+async function startAdEventIfRequired({ telegramId, action }) {
+  const { action_ads_enabled } = await getAllSettings();
+  if (!action_ads_enabled) return null;
+  return startAdEvent({ telegramId, action });
+}
+
+async function consumeAdEventIfRequired({ nonce, telegramId, action }) {
+  const { action_ads_enabled } = await getAllSettings();
+  if (!action_ads_enabled) return null;
+  return consumeAdEvent({ nonce, telegramId, action });
+}
+
+module.exports = {
+  startAdEvent,
+  confirmAdEvent,
+  confirmOldestPendingByUser,
+  consumeAdEvent,
+  startAdEventIfRequired,
+  consumeAdEventIfRequired,
+};

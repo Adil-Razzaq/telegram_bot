@@ -1,5 +1,5 @@
 const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
-const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
 
 // Base probabilities only — the actual payout AMOUNTS come from
@@ -102,7 +102,7 @@ async function getSpinConfigForUser({ telegramId }) {
 }
 
 async function prepareSpin({ telegramId }) {
-  return startAdEvent({ telegramId, action: 'spin' });
+  return startAdEventIfRequired({ telegramId, action: 'spin' });
 }
 
 /**
@@ -120,7 +120,7 @@ async function playSpin({ telegramId, nonce }) {
   // and it's not exploitable (a wasted ad view costs the user, not us).
   // event.estimated_price (Monetag's real revenue for this exact ad
   // view) is what a free spin's payout gets matched against below.
-  const event = await consumeAdEvent({ nonce, telegramId, action: 'spin' });
+  const event = await consumeAdEventIfRequired({ nonce, telegramId, action: 'spin' });
 
   const config = await getSpinConfig();
   const settings = await getAllSettings();
@@ -182,7 +182,7 @@ async function playSpin({ telegramId, nonce }) {
       ? pickNearestSegment(
           config.segments,
           pool,
-          (event.estimated_price || 0) * settings.points_per_usd * FREE_SPIN_REVENUE_SHARE
+          (event?.estimated_price || 0) * settings.points_per_usd * FREE_SPIN_REVENUE_SHARE
         )
       : pickSegment(config.segments, pool);
 

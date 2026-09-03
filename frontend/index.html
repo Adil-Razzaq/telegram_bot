@@ -15,8 +15,15 @@
       rel="stylesheet"
     />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Monetag SDK — zone 11654422, exposes the global show_11654422() function -->
-    <script src="//libtl.com/sdk.js" data-zone="11654422" data-sdk="show_11654422"></script>
+    <!-- Monetag SDK is now injected dynamically at runtime by
+         monetag.js's initMonetag(zoneId), once App.jsx has fetched the
+         admin-configured zone ID from /user/config — no static <script>
+         here anymore, since a hardcoded data-zone would defeat the point
+         of making the zone ID admin-editable. -->
+    <!-- Adsgram SDK — blockId is passed to Adsgram.init() at call time
+         (see adsgram.js), not baked into this tag, so this one CAN stay
+         static; it's just the generic loader. -->
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
   </head>
   <body>
     <div id="root"></div>

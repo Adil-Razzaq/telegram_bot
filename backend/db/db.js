@@ -31,6 +31,12 @@ const COLUMNS_TO_ENSURE = [
   // ADD COLUMN, so this is added plain and backfilled below in migrate().
   { table: 'miner_state', column: 'cycles_reset_date', ddl: 'TEXT' },
   { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
+  // Distinguishes which network sent this row now that both Monetag and
+  // Adsgram write into the same log table (see routes/bot.js). Constant
+  // string default is fine for ALTER ADD COLUMN, unlike the date('now')
+  // issue above — every pre-existing row really was Monetag, since
+  // Adsgram didn't exist in this table before now.
+  { table: 'ad_postback_log', column: 'network', ddl: "TEXT DEFAULT 'monetag'" },
   { table: 'users', column: 'free_spins_used', ddl: 'INTEGER DEFAULT 0' },
 ];
 

@@ -1,5 +1,5 @@
 const { client, rolloverMinerCyclesIfNeeded } = require('../db/db');
-const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
 
 /**
@@ -109,11 +109,11 @@ async function prepareStart({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEvent({ telegramId, action: 'miner_start' });
+  return startAdEventIfRequired({ telegramId, action: 'miner_start' });
 }
 
 async function startCycle({ telegramId, nonce }) {
-  await consumeAdEvent({ nonce, telegramId, action: 'miner_start' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_start' });
 
   const row = await getRow(telegramId);
   const settings = await getAllSettings();
@@ -148,11 +148,11 @@ async function prepareClaim({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEvent({ telegramId, action: 'miner_claim' });
+  return startAdEventIfRequired({ telegramId, action: 'miner_claim' });
 }
 
 async function claim({ telegramId, nonce }) {
-  await consumeAdEvent({ nonce, telegramId, action: 'miner_claim' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim' });
 
   const settings = await getAllSettings();
   const tx = await client.transaction('write');
