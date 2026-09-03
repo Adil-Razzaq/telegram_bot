@@ -21,13 +21,17 @@ const { getAllSettings } = require('../utils/settings');
  *     instead of leaving it looking like mining is still in progress.
  *     Nothing forces an auto-claim — that still costs an ad, same as
  *     any other claim — this is a display-state fix, not a payout one.
- *   - Ad-gated Boost: once per cycle, watching an extra ad compresses
- *     the REMAINING time in the current cycle by miner_boost_multiplier
- *     (default 3x) — same total reward for that cycle, just reached
- *     sooner. Implemented by shrinking cycle_ends_at itself (see
- *     activateBoost), so accruedNow's existing elapsed/total-from-
- *     stored-timestamps math handles the speed-up with no special
- *     casing needed.
+ *   - Ad-gated Boost: once per cycle, watching an extra ad multiplies
+ *     this cycle's TOTAL reward target by miner_boost_multiplier
+ *     (default 3x) — e.g. a cycle worth 100 becomes worth 300. The
+ *     cycle's start/end timestamps don't change, so that 300 still
+ *     accrues gradually across the same remaining cycle time (see
+ *     effectiveCyclePoints/accruedNow) — boosting just raises the
+ *     ceiling, it doesn't shorten the clock. If boosted mid-cycle, the
+ *     portion already elapsed is recomputed against the new, higher
+ *     target too (accruedNow always derives from elapsed/total against
+ *     whatever the current effective target is — there's no separate
+ *     "boosted portion" to track).
  *   - Capped at `miner_cycles_per_day` starts per calendar day.
  *   - `miner_daily_points` is split across the day's cycles with a
  *     remainder-safe distribution so the total always adds up to
@@ -57,15 +61,25 @@ async function getRow(telegramId) {
   return res.rows[0];
 }
 
-// Whatever this cycle would be worth in total once it finishes.
+// Whatever this cycle would be worth in total once it finishes, BEFORE
+// any boost. Used as the baseline for display (e.g. "next_cycle_points"
+// on the not-yet-started upcoming cycle, which can never be boosted).
 function currentCyclePoints(row, settings) {
   return pointsForCycleIndex(row.cycles_completed_today, settings.miner_daily_points, settings.miner_cycles_per_day);
 }
 
-// totalSeconds comes from the ROW's own stored start/end timestamps, not
-// straight from settings.miner_cycle_hours — that's what lets Boost
-// (which shrinks cycle_ends_at) speed up accrual with no extra math
-// here: a compressed window just means elapsed/total reaches 1.0 sooner.
+// The REAL target for the running cycle right now — base points, times
+// miner_boost_multiplier if boost has been activated for this cycle.
+// This is what accrual, the live rate, and the final claim payout all
+// actually use; currentCyclePoints() above is only the pre-boost figure.
+function effectiveCyclePoints(row, settings) {
+  const base = currentCyclePoints(row, settings);
+  return row.boost_active ? base * settings.miner_boost_multiplier : base;
+}
+
+// totalSeconds comes from the ROW's own stored start/end timestamps —
+// unaffected by boost now, since boost raises the point target rather
+// than shrinking the time window.
 function cycleTotalSeconds(row) {
   const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
   const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
@@ -74,14 +88,14 @@ function cycleTotalSeconds(row) {
 
 // Prorated accrual RIGHT NOW for a running cycle — floored, so a claim
 // can never pay out more than has genuinely elapsed. Capped at the full
-// cycle amount once elapsed time reaches the cycle length (including a
-// boosted, shrunk length).
+// (boosted, if active) cycle amount once elapsed time reaches the cycle
+// length.
 function accruedNow(row, settings) {
   if (row.status !== 'running') return 0;
   const totalSeconds = cycleTotalSeconds(row);
   const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
   const elapsedSeconds = Math.max(0, Math.min(totalSeconds, (Date.now() - startedAt) / 1000));
-  const cyclePoints = currentCyclePoints(row, settings);
+  const cyclePoints = effectiveCyclePoints(row, settings);
   return Math.floor(cyclePoints * (elapsedSeconds / totalSeconds));
 }
 
@@ -90,7 +104,11 @@ async function getStatus({ telegramId }) {
   const { miner_daily_points, miner_cycles_per_day, miner_boost_multiplier } = settings;
 
   const cyclesRemaining = Math.max(0, miner_cycles_per_day - row.cycles_completed_today);
-  const cyclePoints = currentCyclePoints(row, settings);
+  // Base (pre-boost) points — only meaningful for the not-yet-started
+  // next cycle. For the currently running cycle, effectiveCyclePoints
+  // below is the real, possibly-boosted target.
+  const baseCyclePoints = currentCyclePoints(row, settings);
+  const cyclePoints = effectiveCyclePoints(row, settings);
   const totalSeconds = row.status === 'running' ? cycleTotalSeconds(row) : 0;
 
   let secondsRemainingInCycle = 0;
@@ -119,7 +137,10 @@ async function getStatus({ telegramId }) {
     current_cycle_points: row.status === 'running' ? cyclePoints : 0,
     rate_per_second: row.status === 'running' ? cyclePoints / totalSeconds : 0,
     accrued_now: accruedNow(row, settings),
-    next_cycle_points: cyclesRemaining > 0 ? cyclePoints : 0,
+    // The upcoming, not-yet-started cycle is never boosted (boost is
+    // per-cycle and only activates once running), so this always shows
+    // the base figure — never the currently-running cycle's boosted one.
+    next_cycle_points: cyclesRemaining > 0 ? baseCyclePoints : 0,
     can_start: row.status === 'idle' && cyclesRemaining > 0,
     daily_points: miner_daily_points,
     boost_active: !!row.boost_active,
@@ -196,7 +217,7 @@ async function claim({ telegramId, nonce }) {
       args: [telegramId],
     });
     const rowRes = await tx.execute({
-      sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today FROM miner_state WHERE telegram_id = ?`,
+      sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today, boost_active FROM miner_state WHERE telegram_id = ?`,
       args: [telegramId],
     });
     const row = rowRes.rows[0];
@@ -209,8 +230,9 @@ async function claim({ telegramId, nonce }) {
 
     // Recomputed at claim time, inside the transaction — not trusted
     // from anything the client sent, so there's no way to claim more
-    // than has genuinely elapsed regardless of what the frontend shows
-    // (including under a boosted, shrunk cycle window).
+    // than has genuinely elapsed, and boost_active (fetched fresh in
+    // this same query) is what makes a boosted claim actually pay out
+    // the higher, tripled target rather than the base one.
     const earnedPoints = accruedNow(row, settings);
 
     await tx.execute({
@@ -242,10 +264,10 @@ async function claim({ telegramId, nonce }) {
   }
 }
 
-// --- Boost: watch an ad to compress the REMAINING time in the current
-// cycle by miner_boost_multiplier. Same total reward, reached sooner —
-// see cycleTotalSeconds/accruedNow above for how the speed-up actually
-// takes effect once cycle_ends_at is shrunk below.
+// --- Boost: watch an ad to multiply the current cycle's TOTAL reward
+// target by miner_boost_multiplier (e.g. 100 -> 300 at 3x). The cycle's
+// timing is untouched — see effectiveCyclePoints/accruedNow above for
+// how the higher target then accrues across the same remaining time.
 
 async function prepareBoost({ telegramId }) {
   const row = await getRow(telegramId);
@@ -271,7 +293,6 @@ async function prepareBoost({ telegramId }) {
 async function activateBoost({ telegramId, nonce }) {
   await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_boost' });
 
-  const settings = await getAllSettings();
   const tx = await client.transaction('write');
   try {
     const rowRes = await tx.execute({
@@ -291,24 +312,19 @@ async function activateBoost({ telegramId, nonce }) {
       throw err;
     }
 
-    const now = Date.now();
     const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
-    const remainingMs = endsAt - now;
-    if (remainingMs <= 0) {
+    if (endsAt <= Date.now()) {
       const err = new Error('This cycle has already finished — claim it to start a new one');
       err.statusCode = 400;
       throw err;
     }
 
-    const newRemainingMs = remainingMs / settings.miner_boost_multiplier;
-    // Match SQLite's own datetime() output format ('YYYY-MM-DD HH:MM:SS',
-    // implicitly UTC) so this stays consistent with every other
-    // cycle_ends_at write and read (all of which append/expect 'Z').
-    const newEndsAt = new Date(now + newRemainingMs).toISOString().slice(0, 19).replace('T', ' ');
-
+    // Just flip the flag — effectiveCyclePoints() picks this up
+    // everywhere (accrual, live rate, claim payout) automatically. No
+    // timestamp math needed since timing is untouched.
     await tx.execute({
-      sql: `UPDATE miner_state SET cycle_ends_at = ?, boost_active = 1 WHERE telegram_id = ?`,
-      args: [newEndsAt, telegramId],
+      sql: `UPDATE miner_state SET boost_active = 1 WHERE telegram_id = ?`,
+      args: [telegramId],
     });
     await tx.commit();
   } catch (err) {
