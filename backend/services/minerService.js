@@ -1,41 +1,47 @@
 const { client, rolloverMinerCyclesIfNeeded } = require('../db/db');
-const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
+const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
 
 /**
- * Manual, ad-gated, cycle-based miner:
+ * Manual, cycle-based miner:
  *
- *   - Nothing accrues until the user taps Start (watches an ad first).
+ *   - Start and Claim are FREE — no ad required for either. Basic
+ *     mining is a core app function and Adsgram's publisher policy
+ *     requires that "basic functions of an app are available without
+ *     watching ads", and separately rejects any app where "each click
+ *     leads to an advertisement" or where "you need to watch
+ *     advertisements to perform any actions". Both used to be ad-gated
+ *     here — removed entirely, unconditionally (not just toggled off
+ *     via a setting an admin could flip back on).
  *   - Once started, points accrue continuously in real time toward that
  *     cycle's target (see pointsForCycleIndex) over `miner_cycle_hours`.
  *   - Claim is available AT ANY TIME while running — not just once the
  *     cycle finishes — and pays out whatever's accrued so far
  *     (prorated by elapsed time, capped at the full cycle amount if
- *     claimed after it's actually finished). Claiming also requires
- *     watching an ad, and ends that cycle (status -> idle) whether it
- *     was claimed early or after completion — the user then has to tap
- *     Start (+ ad) again for the next cycle.
+ *     claimed after it's actually finished).
  *   - Once the cycle's timer reaches zero, accrual is capped (always
  *     was) AND getStatus reports cycle_complete: true so the frontend
  *     can stop showing it as "running" and clearly prompt to Claim
  *     instead of leaving it looking like mining is still in progress.
- *     Nothing forces an auto-claim — that still costs an ad, same as
- *     any other claim — this is a display-state fix, not a payout one.
- *   - Ad-gated Boost: once per cycle, watching an extra ad multiplies
- *     this cycle's TOTAL reward target by miner_boost_multiplier
- *     (default 3x) — e.g. a cycle worth 100 becomes worth 300. The
- *     cycle's start/end timestamps don't change, so that 300 still
- *     accrues gradually across the same remaining cycle time (see
- *     effectiveCyclePoints/accruedNow) — boosting just raises the
- *     ceiling, it doesn't shorten the clock. If boosted mid-cycle, the
- *     portion already elapsed is recomputed against the new, higher
- *     target too (accruedNow always derives from elapsed/total against
- *     whatever the current effective target is — there's no separate
- *     "boosted portion" to track).
+ *   - Boost (the app's actual, optional ad placement for mining):
+ *     watching an ad multiplies THIS CYCLE'S TOTAL reward target by
+ *     miner_boost_multiplier (default 3x) — e.g. a 100-point cycle
+ *     becomes worth 300, with the extra 200 explicitly earned by
+ *     watching that ad. The cycle's start/end timestamps don't change,
+ *     so that 300 still accrues gradually across the same remaining
+ *     cycle time (see effectiveCyclePoints/accruedNow) — boosting
+ *     raises the rate, not the deadline. Always requires an ad — not
+ *     gated by action_ads_enabled, same reasoning as the daily
+ *     watch-ad tasks and the streak claim (see adWatchService.js /
+ *     streakService.js): this IS the ad placement, so it wouldn't make
+ *     sense for it to silently skip showing one. This is exactly the
+ *     "clear indication that the user needs to watch an ad to get a
+ *     bonus" pattern Adsgram's policy explicitly allows.
  *   - Capped at `miner_cycles_per_day` starts per calendar day.
  *   - `miner_daily_points` is split across the day's cycles with a
  *     remainder-safe distribution so the total always adds up to
- *     exactly miner_daily_points regardless of cycle count.
+ *     exactly miner_daily_points regardless of cycle count (before any
+ *     boost is applied on top).
  */
 
 async function ensureMinerRow(telegramId) {
@@ -151,6 +157,9 @@ async function getStatus({ telegramId }) {
   };
 }
 
+// Start is unconditionally free — see file header. No ad involved at
+// all; this still returns a promise so the route handler (which awaits
+// a nonce) doesn't need special-casing, but the "nonce" is always null.
 async function prepareStart({ telegramId }) {
   const row = await getRow(telegramId);
   const settings = await getAllSettings();
@@ -164,12 +173,10 @@ async function prepareStart({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: 'miner_start' });
+  return null;
 }
 
-async function startCycle({ telegramId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_start' });
-
+async function startCycle({ telegramId }) {
   const row = await getRow(telegramId);
   const settings = await getAllSettings();
   if (row.status !== 'idle') {
@@ -194,8 +201,7 @@ async function startCycle({ telegramId, nonce }) {
   return getStatus({ telegramId });
 }
 
-// Step 1 of claiming: get an ad nonce. Mirrors prepareStart exactly —
-// claim now costs an ad view too, same as starting does.
+// Claim is unconditionally free too — same reasoning as Start.
 async function prepareClaim({ telegramId }) {
   const row = await getRow(telegramId);
   if (row.status !== 'running') {
@@ -203,12 +209,10 @@ async function prepareClaim({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: 'miner_claim' });
+  return null;
 }
 
-async function claim({ telegramId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim' });
-
+async function claim({ telegramId }) {
   const settings = await getAllSettings();
   const tx = await client.transaction('write');
   try {
@@ -268,6 +272,10 @@ async function claim({ telegramId, nonce }) {
 // target by miner_boost_multiplier (e.g. 100 -> 300 at 3x). The cycle's
 // timing is untouched — see effectiveCyclePoints/accruedNow above for
 // how the higher target then accrues across the same remaining time.
+// This is the app's real ad placement for mining — always required,
+// unconditionally (uses startAdEvent/consumeAdEvent directly, not the
+// *IfRequired helpers, so no settings toggle can turn it into a
+// silent no-ad skip).
 
 async function prepareBoost({ telegramId }) {
   const row = await getRow(telegramId);
@@ -287,11 +295,11 @@ async function prepareBoost({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: 'miner_boost' });
+  return startAdEvent({ telegramId, action: 'miner_boost' });
 }
 
 async function activateBoost({ telegramId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_boost' });
+  await consumeAdEvent({ nonce, telegramId, action: 'miner_boost' });
 
   const tx = await client.transaction('write');
   try {

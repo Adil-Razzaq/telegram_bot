@@ -101,7 +101,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
   return (
     <div className="spin-wheel-container">
       <h2 className="page-title">Spin</h2>
-      <p className="page-subtitle">Watch a short ad, spin the wheel, win ADLX</p>
+      <p className="page-subtitle">Spin the wheel and win ADLX — or watch a short ad for a free spin</p>
 
       <div className="spin-wheel-frame">
         <div className="spin-wheel-wrap">
@@ -147,7 +147,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
           : isFreeSpin
           ? 'Watch ad & Spin (Free)'
           : canAfford
-          ? `Watch ad & Spin (${entryFee} ADLX)`
+          ? `Spin (${entryFee} ADLX)`
           : 'Not enough ADLX'}
       </button>
 

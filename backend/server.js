@@ -17,6 +17,7 @@ const taskRoutes = require('./routes/tasks');
 const walletRoutes = require('./routes/wallet');
 const streakRoutes = require('./routes/streak');
 const leaderboardRoutes = require('./routes/leaderboard');
+const payoutsRoutes = require('./routes/payouts');
 
 const app = express();
 
@@ -63,6 +64,17 @@ app.get('/admin', (req, res) => {
 
 app.use('/assets', express.static(path.join(__dirname, 'public')));
 
+// Public proof-of-payout page — no auth, so an Adsgram/Monetag reviewer
+// (or anyone) can verify real payouts happen without a Telegram
+// account. See routes/payouts.js and the publisher policy note there.
+app.get('/payouts', (req, res) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  );
+  res.sendFile(path.join(__dirname, 'public', 'payouts.html'));
+});
+
 app.use('/api/spin', spinRoutes);
 app.use('/api/referral', referralRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
@@ -73,6 +85,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/streak', streakRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/payouts', payoutsRoutes);
 app.use('/bot', botRoutes);
 
 // Central error handler. In production, unexpected (non-statusCode) errors

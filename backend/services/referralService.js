@@ -1,5 +1,4 @@
 const { client, rolloverUserRefCounterIfNeeded } = require('../db/db');
-const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getSetting } = require('../utils/settings');
 
 // Default 100 pts/claim (utils/settings.js) — tunable live via the admin
@@ -67,14 +66,16 @@ async function grantReferral({ referrerId, referredTelegramId }) {
   }
 }
 
+// Claiming a referral reward you've already earned is a core payout,
+// not a bonus — FREE, no ad required (see minerService.js header for
+// the Adsgram policy reasoning this follows throughout the app).
 async function prepareClaim({ telegramId }) {
-  return startAdEventIfRequired({ telegramId, action: 'referral_claim' });
+  return null;
 }
 
-async function claimReferral({ telegramId, nonce }) {
+async function claimReferral({ telegramId }) {
   const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
   await rolloverUserRefCounterIfNeeded(telegramId);
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'referral_claim' });
 
   const tx = await client.transaction('write');
   try {

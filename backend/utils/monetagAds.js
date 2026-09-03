@@ -139,13 +139,17 @@ async function confirmOldestPendingByUser({ telegramId, action, estimatedPrice =
 
 const { getAllSettings } = require('./settings');
 
-// Every reward-gated action (spin, miner start/claim, referral claim,
-// task claim, watch-ad tasks) goes through these two instead of calling
-// startAdEvent/consumeAdEvent directly, so the admin's single
-// action_ads_enabled switch (Settings panel) affects all of them at
-// once. When off, prepare returns null (frontend skips showRewardedAd
-// entirely — see each component's handleX function) and consume is a
-// no-op (nothing to verify, the ad requirement is off).
+// Only the admin-created one-time "watch an ad" tasks (taskService.js's
+// watch_ad task type) go through these now — everything else (mining,
+// spin, referral claim) is unconditionally free, and everything else
+// that's genuinely ad-gated (Miner Boost, the daily watch-ad task
+// slots, the streak claim) calls startAdEvent/consumeAdEvent directly
+// so no settings toggle can turn a real ad placement into a silent
+// skip. When action_ads_enabled is off, prepare returns null (frontend
+// skips showRewardedAd entirely — see each component's handleX
+// function) and consume is a no-op (nothing to verify, the ad
+// requirement is off) — used only to let an admin pause that one
+// bonus task type site-wide.
 async function startAdEventIfRequired({ telegramId, action }) {
   const { action_ads_enabled } = await getAllSettings();
   if (!action_ads_enabled) return null;

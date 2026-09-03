@@ -42,6 +42,17 @@ const SETTING_DEFS = {
   // actions proceed WITHOUT requiring an ad — see each service's use of
   // this flag before calling startAdEvent/consumeAdEvent.
   action_ads_enabled: { type: 'boolean', default: true },
+  // ^ Scope narrowed: this ONLY gates admin-created one-time "watch an
+  // ad" tasks (taskService.js's watch_ad task type) — a pure bonus
+  // feature an admin might want to pause site-wide. It does NOT gate
+  // mining start/claim, spin, or referral claim (all unconditionally
+  // free — see minerService.js's header for why), nor Miner Boost, the
+  // daily watch-ad task slots, or the streak claim (all unconditionally
+  // ad-required — they ARE the ad placement, so there's no sense in
+  // which they'd have an "off" state). This keeps it impossible for an
+  // admin to accidentally re-create the "ad required for basic app
+  // functions" pattern Adsgram's publisher policy rejects by flipping
+  // one setting.
   // Which network serves those SAME reward-gated actions (spin, miner
   // start/claim, referral claim) — switchable independent of the
   // passive auto-ad's network below. Does NOT cover the two dedicated

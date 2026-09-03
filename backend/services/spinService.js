@@ -1,5 +1,5 @@
 const { client, rolloverDailyCountersIfNeeded } = require('../db/db');
-const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
+const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
 
 // Base probabilities only — the actual payout AMOUNTS come from
@@ -101,26 +101,40 @@ async function getSpinConfigForUser({ telegramId }) {
   };
 }
 
+async function isFreeSpinAvailable(telegramId) {
+  const [config, userRes] = await Promise.all([
+    getSpinConfig(),
+    client.execute({ sql: 'SELECT free_spins_used FROM users WHERE telegram_id = ?', args: [telegramId] }),
+  ]);
+  return (userRes.rows[0]?.free_spins_used ?? 0) < config.freeSpins;
+}
+
+// A PAID spin (costs spin_entry_fee points, already-earned in-game
+// currency) is core gameplay and must work with no ad at all — see
+// minerService.js's header for the Adsgram-policy reasoning this app
+// follows throughout ("basic functions available without ads",
+// disallowing "each click leads to an ad" / "need to watch an ad to
+// perform any action"). The FREE daily spin allowance is the one
+// legitimate ad placement here: watching an ad to get something for
+// nothing is exactly the "clear indication you need to watch an ad to
+// get a bonus" pattern Adsgram's policy explicitly allows — so only
+// that path requires one.
 async function prepareSpin({ telegramId }) {
-  return startAdEventIfRequired({ telegramId, action: 'spin' });
+  const free = await isFreeSpinAvailable(telegramId);
+  if (!free) return null; // paid spin — no ad needed
+  return startAdEvent({ telegramId, action: 'spin' });
 }
 
 /**
- * Plays one spin for telegramId. `nonce` must be a Monetag-confirmed ad
- * event from prepareSpin() — consumeAdEvent throws if it's missing,
- * unconfirmed, expired, or already used. Throws Error with .statusCode
- * for the route layer to translate into an HTTP response.
+ * Plays one spin for telegramId. If this turns out to be a free spin
+ * (no entry fee), `nonce` must be a Monetag-confirmed ad event from
+ * prepareSpin() — consumeAdEvent throws if it's missing, unconfirmed,
+ * expired, or already used. Paid spins ignore `nonce` entirely; no ad
+ * involved. Throws Error with .statusCode for the route layer to
+ * translate into an HTTP response.
  */
 async function playSpin({ telegramId, nonce }) {
   await rolloverDailyCountersIfNeeded();
-
-  // Consumed before the balance transaction: if the spin later fails
-  // (e.g. insufficient balance), the ad view is "spent" either way —
-  // that's an acceptable tradeoff for keeping this atomic and simple,
-  // and it's not exploitable (a wasted ad view costs the user, not us).
-  // event.estimated_price (Monetag's real revenue for this exact ad
-  // view) is what a free spin's payout gets matched against below.
-  const event = await consumeAdEventIfRequired({ nonce, telegramId, action: 'spin' });
 
   const config = await getSpinConfig();
   const settings = await getAllSettings();
@@ -145,6 +159,23 @@ async function playSpin({ telegramId, nonce }) {
       const err = new Error('Insufficient balance for spin entry fee');
       err.statusCode = 400;
       throw err;
+    }
+
+    // Only a free spin needs a confirmed ad view — consumed here,
+    // inside the transaction, right where it's actually needed (if the
+    // rest of the spin later fails, the ad view is still "spent",
+    // which is fine — it's not exploitable, a wasted ad view costs the
+    // user, not us). event.estimated_price (Monetag's real revenue for
+    // this exact ad view) sizes the free spin's payout below. A paid
+    // spin never touches the ad system at all.
+    let event = null;
+    if (isFreeSpin) {
+      if (!nonce) {
+        const err = new Error('Watch an ad first to use your free spin');
+        err.statusCode = 400;
+        throw err;
+      }
+      event = await consumeAdEvent({ nonce, telegramId, action: 'spin' });
     }
 
     // 1. Deduct entry fee (0 for a free spin), stamp last_spin_at, track
@@ -174,10 +205,9 @@ async function playSpin({ telegramId, nonce }) {
 
     // Free spins land on whatever segment is closest to what the ad
     // actually earned (50% revenue share) — small, honest, real-value
-    // rewards for a brand-new user, instead of the same random-jackpot
-    // odds as a paid spin. Paid spins keep the weighted-random pick,
-    // now calibrated for ~50% RTP against the entry fee (see
-    // SEGMENT_WEIGHTS above).
+    // rewards, instead of the same random-jackpot odds as a paid spin.
+    // Paid spins keep the weighted-random pick, calibrated for ~50%
+    // RTP against the entry fee (see SEGMENT_WEIGHTS above).
     const segment = isFreeSpin
       ? pickNearestSegment(
           config.segments,
