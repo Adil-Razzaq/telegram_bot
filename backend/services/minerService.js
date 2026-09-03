@@ -1,47 +1,38 @@
 const { client, rolloverMinerCyclesIfNeeded } = require('../db/db');
-const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
 
 /**
- * Manual, cycle-based miner:
+ * Manual, ad-gated, cycle-based miner:
  *
- *   - Start and Claim are FREE — no ad required for either. Basic
- *     mining is a core app function and Adsgram's publisher policy
- *     requires that "basic functions of an app are available without
- *     watching ads", and separately rejects any app where "each click
- *     leads to an advertisement" or where "you need to watch
- *     advertisements to perform any actions". Both used to be ad-gated
- *     here — removed entirely, unconditionally (not just toggled off
- *     via a setting an admin could flip back on).
+ *   - Nothing accrues until the user taps Start (watches an ad first).
  *   - Once started, points accrue continuously in real time toward that
  *     cycle's target (see pointsForCycleIndex) over `miner_cycle_hours`.
  *   - Claim is available AT ANY TIME while running — not just once the
  *     cycle finishes — and pays out whatever's accrued so far
  *     (prorated by elapsed time, capped at the full cycle amount if
- *     claimed after it's actually finished).
+ *     claimed after it's actually finished). Claiming also requires
+ *     watching an ad, and ends that cycle (status -> idle) whether it
+ *     was claimed early or after completion — the user then has to tap
+ *     Start (+ ad) again for the next cycle.
  *   - Once the cycle's timer reaches zero, accrual is capped (always
  *     was) AND getStatus reports cycle_complete: true so the frontend
  *     can stop showing it as "running" and clearly prompt to Claim
  *     instead of leaving it looking like mining is still in progress.
- *   - Boost (the app's actual, optional ad placement for mining):
- *     watching an ad multiplies THIS CYCLE'S TOTAL reward target by
- *     miner_boost_multiplier (default 3x) — e.g. a 100-point cycle
- *     becomes worth 300, with the extra 200 explicitly earned by
- *     watching that ad. The cycle's start/end timestamps don't change,
- *     so that 300 still accrues gradually across the same remaining
- *     cycle time (see effectiveCyclePoints/accruedNow) — boosting
- *     raises the rate, not the deadline. Always requires an ad — not
- *     gated by action_ads_enabled, same reasoning as the daily
- *     watch-ad tasks and the streak claim (see adWatchService.js /
- *     streakService.js): this IS the ad placement, so it wouldn't make
- *     sense for it to silently skip showing one. This is exactly the
- *     "clear indication that the user needs to watch an ad to get a
- *     bonus" pattern Adsgram's policy explicitly allows.
+ *     Nothing forces an auto-claim — that still costs an ad, same as
+ *     any other claim — this is a display-state fix, not a payout one.
+ *   - Ad-gated Boost: once per cycle, watching an extra ad MULTIPLIES
+ *     that cycle's point target by miner_boost_multiplier (default 3x)
+ *     — e.g. a cycle normally worth 25 becomes 75 once boosted: 25
+ *     "original" + 50 "from the ad". Timing is untouched — the cycle
+ *     still takes the same miner_cycle_hours, it just pays out more.
+ *     currentCyclePoints below is the only thing that changes; accrual
+ *     math (elapsed/total * target) is unaffected and just tracks
+ *     toward the bigger target once boosted.
  *   - Capped at `miner_cycles_per_day` starts per calendar day.
  *   - `miner_daily_points` is split across the day's cycles with a
  *     remainder-safe distribution so the total always adds up to
- *     exactly miner_daily_points regardless of cycle count (before any
- *     boost is applied on top).
+ *     exactly miner_daily_points regardless of cycle count.
  */
 
 async function ensureMinerRow(telegramId) {
@@ -67,25 +58,18 @@ async function getRow(telegramId) {
   return res.rows[0];
 }
 
-// Whatever this cycle would be worth in total once it finishes, BEFORE
-// any boost. Used as the baseline for display (e.g. "next_cycle_points"
-// on the not-yet-started upcoming cycle, which can never be boosted).
+// Whatever this cycle would be worth in total once it finishes — tripled
+// (or whatever miner_boost_multiplier is set to) once boost_active, per
+// the redesigned semantics above.
 function currentCyclePoints(row, settings) {
-  return pointsForCycleIndex(row.cycles_completed_today, settings.miner_daily_points, settings.miner_cycles_per_day);
-}
-
-// The REAL target for the running cycle right now — base points, times
-// miner_boost_multiplier if boost has been activated for this cycle.
-// This is what accrual, the live rate, and the final claim payout all
-// actually use; currentCyclePoints() above is only the pre-boost figure.
-function effectiveCyclePoints(row, settings) {
-  const base = currentCyclePoints(row, settings);
-  return row.boost_active ? base * settings.miner_boost_multiplier : base;
+  const base = pointsForCycleIndex(row.cycles_completed_today, settings.miner_daily_points, settings.miner_cycles_per_day);
+  return row.boost_active ? Math.round(base * settings.miner_boost_multiplier) : base;
 }
 
 // totalSeconds comes from the ROW's own stored start/end timestamps —
-// unaffected by boost now, since boost raises the point target rather
-// than shrinking the time window.
+// boost no longer touches these (see currentCyclePoints above for where
+// the multiplier now actually applies), so this is just the plain cycle
+// duration.
 function cycleTotalSeconds(row) {
   const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
   const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
@@ -93,15 +77,15 @@ function cycleTotalSeconds(row) {
 }
 
 // Prorated accrual RIGHT NOW for a running cycle — floored, so a claim
-// can never pay out more than has genuinely elapsed. Capped at the full
-// (boosted, if active) cycle amount once elapsed time reaches the cycle
-// length.
+// can never pay out more than has genuinely elapsed. cyclePoints already
+// includes the boost multiplier when active, so a boosted cycle's rate
+// is simply faster in POINTS terms (not time) automatically.
 function accruedNow(row, settings) {
   if (row.status !== 'running') return 0;
   const totalSeconds = cycleTotalSeconds(row);
   const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
   const elapsedSeconds = Math.max(0, Math.min(totalSeconds, (Date.now() - startedAt) / 1000));
-  const cyclePoints = effectiveCyclePoints(row, settings);
+  const cyclePoints = currentCyclePoints(row, settings);
   return Math.floor(cyclePoints * (elapsedSeconds / totalSeconds));
 }
 
@@ -110,11 +94,7 @@ async function getStatus({ telegramId }) {
   const { miner_daily_points, miner_cycles_per_day, miner_boost_multiplier } = settings;
 
   const cyclesRemaining = Math.max(0, miner_cycles_per_day - row.cycles_completed_today);
-  // Base (pre-boost) points — only meaningful for the not-yet-started
-  // next cycle. For the currently running cycle, effectiveCyclePoints
-  // below is the real, possibly-boosted target.
-  const baseCyclePoints = currentCyclePoints(row, settings);
-  const cyclePoints = effectiveCyclePoints(row, settings);
+  const cyclePoints = currentCyclePoints(row, settings);
   const totalSeconds = row.status === 'running' ? cycleTotalSeconds(row) : 0;
 
   let secondsRemainingInCycle = 0;
@@ -138,28 +118,24 @@ async function getStatus({ telegramId }) {
     cycle_hours: settings.miner_cycle_hours,
     // Current cycle's full target, and the rate/second toward it — lets
     // the frontend animate a live-ticking number between polls, without
-    // hitting the server every second just to move a counter. Rate
-    // reflects any active boost automatically since totalSeconds does.
+    // hitting the server every second just to move a counter. Both
+    // already reflect an active boost automatically since cyclePoints
+    // (currentCyclePoints above) does.
     current_cycle_points: row.status === 'running' ? cyclePoints : 0,
     rate_per_second: row.status === 'running' ? cyclePoints / totalSeconds : 0,
     accrued_now: accruedNow(row, settings),
-    // The upcoming, not-yet-started cycle is never boosted (boost is
-    // per-cycle and only activates once running), so this always shows
-    // the base figure — never the currently-running cycle's boosted one.
-    next_cycle_points: cyclesRemaining > 0 ? baseCyclePoints : 0,
+    next_cycle_points: cyclesRemaining > 0 ? cyclePoints : 0,
     can_start: row.status === 'idle' && cyclesRemaining > 0,
     daily_points: miner_daily_points,
     boost_active: !!row.boost_active,
     boost_multiplier: miner_boost_multiplier,
-    // Boost only makes sense while genuinely still counting down — once
-    // the cycle is complete there's nothing left to speed up.
-    can_boost: row.status === 'running' && !row.boost_active && secondsRemainingInCycle > 0,
+    // Boost is available any time while running, even after the timer
+    // hits zero and it's just waiting to be claimed — it still raises
+    // the payout right up until claim (see currentCyclePoints above).
+    can_boost: row.status === 'running' && !row.boost_active,
   };
 }
 
-// Start is unconditionally free — see file header. No ad involved at
-// all; this still returns a promise so the route handler (which awaits
-// a nonce) doesn't need special-casing, but the "nonce" is always null.
 async function prepareStart({ telegramId }) {
   const row = await getRow(telegramId);
   const settings = await getAllSettings();
@@ -173,10 +149,12 @@ async function prepareStart({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return null;
+  return startAdEventIfRequired({ telegramId, action: 'miner_start' });
 }
 
-async function startCycle({ telegramId }) {
+async function startCycle({ telegramId, nonce }) {
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_start' });
+
   const row = await getRow(telegramId);
   const settings = await getAllSettings();
   if (row.status !== 'idle') {
@@ -201,7 +179,8 @@ async function startCycle({ telegramId }) {
   return getStatus({ telegramId });
 }
 
-// Claim is unconditionally free too — same reasoning as Start.
+// Step 1 of claiming: get an ad nonce. Mirrors prepareStart exactly —
+// claim now costs an ad view too, same as starting does.
 async function prepareClaim({ telegramId }) {
   const row = await getRow(telegramId);
   if (row.status !== 'running') {
@@ -209,10 +188,12 @@ async function prepareClaim({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return null;
+  return startAdEventIfRequired({ telegramId, action: 'miner_claim' });
 }
 
-async function claim({ telegramId }) {
+async function claim({ telegramId, nonce }) {
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim' });
+
   const settings = await getAllSettings();
   const tx = await client.transaction('write');
   try {
@@ -234,9 +215,8 @@ async function claim({ telegramId }) {
 
     // Recomputed at claim time, inside the transaction — not trusted
     // from anything the client sent, so there's no way to claim more
-    // than has genuinely elapsed, and boost_active (fetched fresh in
-    // this same query) is what makes a boosted claim actually pay out
-    // the higher, tripled target rather than the base one.
+    // than has genuinely elapsed regardless of what the frontend shows
+    // (including under a boosted, shrunk cycle window).
     const earnedPoints = accruedNow(row, settings);
 
     await tx.execute({
@@ -268,14 +248,10 @@ async function claim({ telegramId }) {
   }
 }
 
-// --- Boost: watch an ad to multiply the current cycle's TOTAL reward
-// target by miner_boost_multiplier (e.g. 100 -> 300 at 3x). The cycle's
-// timing is untouched — see effectiveCyclePoints/accruedNow above for
-// how the higher target then accrues across the same remaining time.
-// This is the app's real ad placement for mining — always required,
-// unconditionally (uses startAdEvent/consumeAdEvent directly, not the
-// *IfRequired helpers, so no settings toggle can turn it into a
-// silent no-ad skip).
+// --- Boost: watch an ad to multiply the CURRENT cycle's point target
+// by miner_boost_multiplier. Available any time while running,
+// including after the timer's hit zero and it's just waiting to be
+// claimed — boosting still raises the payout right up until claim.
 
 async function prepareBoost({ telegramId }) {
   const row = await getRow(telegramId);
@@ -289,22 +265,16 @@ async function prepareBoost({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
-  if (endsAt <= Date.now()) {
-    const err = new Error('This cycle has already finished — claim it to start a new one');
-    err.statusCode = 400;
-    throw err;
-  }
-  return startAdEvent({ telegramId, action: 'miner_boost' });
+  return startAdEventIfRequired({ telegramId, action: 'miner_boost' });
 }
 
 async function activateBoost({ telegramId, nonce }) {
-  await consumeAdEvent({ nonce, telegramId, action: 'miner_boost' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_boost' });
 
   const tx = await client.transaction('write');
   try {
     const rowRes = await tx.execute({
-      sql: `SELECT status, cycle_ends_at, boost_active FROM miner_state WHERE telegram_id = ?`,
+      sql: `SELECT status, boost_active FROM miner_state WHERE telegram_id = ?`,
       args: [telegramId],
     });
     const row = rowRes.rows[0];
@@ -320,16 +290,6 @@ async function activateBoost({ telegramId, nonce }) {
       throw err;
     }
 
-    const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
-    if (endsAt <= Date.now()) {
-      const err = new Error('This cycle has already finished — claim it to start a new one');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    // Just flip the flag — effectiveCyclePoints() picks this up
-    // everywhere (accrual, live rate, claim payout) automatically. No
-    // timestamp math needed since timing is untouched.
     await tx.execute({
       sql: `UPDATE miner_state SET boost_active = 1 WHERE telegram_id = ?`,
       args: [telegramId],

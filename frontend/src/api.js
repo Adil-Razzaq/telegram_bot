@@ -54,11 +54,13 @@ export const api = {
   requestWithdrawal: (address, points) =>
     apiCall('/withdrawal/request', { method: 'POST', body: { address, points } }),
   withdrawalHistory: () => apiCall('/withdrawal/history'),
+  recentPayouts: () => apiCall('/withdrawal/recent-payouts'),
   adWatchStatus: () => apiCall('/tasks/ad-watch/status'),
   prepareAdWatch: (network) => apiCall('/tasks/ad-watch/prepare', { method: 'POST', body: { network } }),
   claimAdWatch: (network, nonce) => apiCall('/tasks/ad-watch/claim', { method: 'POST', body: { network, nonce } }),
   streakStatus: () => apiCall('/streak/status'),
-  prepareStreak: (network) => apiCall('/streak/prepare', { method: 'POST', body: { network } }),
-  claimStreak: (network, nonce) => apiCall('/streak/claim', { method: 'POST', body: { network, nonce } }),
-  leaderboard: () => apiCall('/leaderboard'),
+  prepareStreakClaim: () => apiCall('/streak/prepare-claim', { method: 'POST' }),
+  claimStreak: (nonce) => apiCall('/streak/claim', { method: 'POST', body: { nonce } }),
+  leaderboardTop: () => apiCall('/leaderboard/top'),
+  streamRecent: () => apiCall('/stream/recent'),
 };

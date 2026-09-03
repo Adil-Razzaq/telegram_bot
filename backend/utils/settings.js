@@ -42,17 +42,6 @@ const SETTING_DEFS = {
   // actions proceed WITHOUT requiring an ad — see each service's use of
   // this flag before calling startAdEvent/consumeAdEvent.
   action_ads_enabled: { type: 'boolean', default: true },
-  // ^ Scope narrowed: this ONLY gates admin-created one-time "watch an
-  // ad" tasks (taskService.js's watch_ad task type) — a pure bonus
-  // feature an admin might want to pause site-wide. It does NOT gate
-  // mining start/claim, spin, or referral claim (all unconditionally
-  // free — see minerService.js's header for why), nor Miner Boost, the
-  // daily watch-ad task slots, or the streak claim (all unconditionally
-  // ad-required — they ARE the ad placement, so there's no sense in
-  // which they'd have an "off" state). This keeps it impossible for an
-  // admin to accidentally re-create the "ad required for basic app
-  // functions" pattern Adsgram's publisher policy rejects by flipping
-  // one setting.
   // Which network serves those SAME reward-gated actions (spin, miner
   // start/claim, referral claim) — switchable independent of the
   // passive auto-ad's network below. Does NOT cover the two dedicated
@@ -91,17 +80,23 @@ const SETTING_DEFS = {
   watch_ad_daily_limit_monetag: { type: 'number', default: 3, min: 0 },
   watch_ad_daily_limit_adsgram: { type: 'number', default: 3, min: 0 },
 
-  // --- 7-day streak rewards (points editable per day) ---
-  // Reward paid out for landing on day N of the 7-day cycle — see
-  // services/streakService.js. Escalating defaults so staying on
-  // streak actually pays off; every value is admin-editable here.
-  streak_day_1_points: { type: 'number', default: 10, min: 0 },
-  streak_day_2_points: { type: 'number', default: 20, min: 0 },
-  streak_day_3_points: { type: 'number', default: 30, min: 0 },
-  streak_day_4_points: { type: 'number', default: 40, min: 0 },
-  streak_day_5_points: { type: 'number', default: 60, min: 0 },
-  streak_day_6_points: { type: 'number', default: 80, min: 0 },
-  streak_day_7_points: { type: 'number', default: 150, min: 0 },
+  // --- 7-day login streak (Leaderboard & Streak tab) ---
+  // One ad-watch per day maintains it; each day's point value is its
+  // own editable setting (same "one field per slot" pattern as
+  // spin_payout_1..6 above) — a typical escalating curve by default,
+  // tune freely. Missing a day resets back to day 1 — see
+  // streakService.js.
+  streak_day1_points: { type: 'number', default: 10, min: 0 },
+  streak_day2_points: { type: 'number', default: 15, min: 0 },
+  streak_day3_points: { type: 'number', default: 20, min: 0 },
+  streak_day4_points: { type: 'number', default: 25, min: 0 },
+  streak_day5_points: { type: 'number', default: 35, min: 0 },
+  streak_day6_points: { type: 'number', default: 50, min: 0 },
+  streak_day7_points: { type: 'number', default: 100, min: 0 },
+  // Which network's ad maintains the streak — independent of
+  // action_ads_network and auto_ad_network, own dedicated switch as
+  // requested.
+  streak_ad_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
 };
 
 // Flat key -> default value, kept for backward compatibility with code

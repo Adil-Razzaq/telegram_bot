@@ -206,12 +206,41 @@ async function rejectWithdrawal({ withdrawalId, reason }) {
   }
 }
 
+// Public "proof of payout" board — required for ad-network moderation
+// (e.g. Adsgram's review explicitly asks for "a public leaderboard... or
+// a dedicated section publishing payout confirmations" as proof real
+// payouts happen). Shows only what's needed to verify a payout is real:
+// masked identity (or @username if they have one — never the raw
+// numeric Telegram ID), amount, and a tx hash anyone can check on
+// Tonviewer themselves. Nothing here is writable by a user, it's a
+// read-only view of withdrawals this same service already completes.
+async function getRecentPayouts({ limit = 20 } = {}) {
+  const res = await client.execute({
+    sql: `SELECT w.telegram_id, u.username, w.amount_usd, w.points_deducted, w.tx_hash, w.processed_at
+          FROM withdrawals w
+          JOIN users u ON u.telegram_id = w.telegram_id
+          WHERE w.status = 'COMPLETED'
+          ORDER BY w.processed_at DESC
+          LIMIT ?`,
+    args: [limit],
+  });
+  return res.rows.map((row) => ({
+    display_name: row.username ? `@${row.username}` : `Player…${String(row.telegram_id).slice(-4)}`,
+    amount_usd: row.amount_usd,
+    points: row.points_deducted,
+    tx_hash: row.tx_hash,
+    tonviewer_url: `https://tonviewer.com/transaction/${row.tx_hash}`,
+    processed_at: row.processed_at,
+  }));
+}
+
 module.exports = {
   requestWithdrawal,
   listPendingWithdrawals,
   listWithdrawalsForUser,
   completeWithdrawal,
   rejectWithdrawal,
+  getRecentPayouts,
   TON_ADDRESS_REGEX,
   MIN_WITHDRAWAL_POINTS,
 };

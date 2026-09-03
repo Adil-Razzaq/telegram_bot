@@ -215,21 +215,16 @@ CREATE TABLE IF NOT EXISTS daily_ad_watch_state (
     PRIMARY KEY (telegram_id, network, watch_date)
 );
 
--- ADDED: 7-day login/watch-ad streak. `consecutive_days` counts every
--- unbroken daily claim (NOT capped at 7 — this is what lets "best
--- streak" mean something past a single week); the reward for any given
--- claim is looked up from settings.streak_day_N_points using
--- ((consecutive_days - 1) % 7) + 1, so the 7-day reward calendar simply
--- repeats every week for as long as the streak stays unbroken. Missing
--- a calendar day (UTC) resets consecutive_days back to 1 on the next
--- claim — see services/streakService.js.
-CREATE TABLE IF NOT EXISTS streak_state (
+-- ADDED: 7-day login/watch-ad streak (Leaderboard & Streak tab). One
+-- row per user; streak_day is which day they last COMPLETED (1-7,
+-- wraps back to 1 after 7), last_claim_date is the UTC calendar day of
+-- that claim — comparing it to today is how streakService.js decides
+-- whether the streak continues, is available to claim today, or has
+-- been broken by a missed day. See services/streakService.js.
+CREATE TABLE IF NOT EXISTS user_streak (
     telegram_id INTEGER PRIMARY KEY,
-    consecutive_days INTEGER DEFAULT 0,
-    last_claim_date TEXT, -- 'YYYY-MM-DD', UTC calendar day of the last successful claim
-    best_streak INTEGER DEFAULT 0,
-    total_claims INTEGER DEFAULT 0,
-    FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
+    streak_day INTEGER DEFAULT 0,
+    last_claim_date TEXT
 );
 
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);

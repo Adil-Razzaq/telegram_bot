@@ -137,12 +137,12 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-height: 48px;
+  min-height: 52px;
   margin: 0 1px;
-  padding: 6px 2px;
+  padding: 8px 2px;
   background: none;
   border: none;
-  border-radius: 14px;
+  border-radius: 16px;
   color: var(--muted);
   font-size: 9px;
   font-weight: 600;
@@ -152,7 +152,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 
 .app-tabs button .material-symbols-outlined {
-  font-size: 19px;
+  font-size: 20px;
   transition: font-variation-settings 0.15s ease;
 }
 
@@ -851,6 +851,17 @@ h3 {
   color: var(--muted);
 }
 
+.miner-boost-badge {
+  background: rgba(0, 227, 139, 0.12);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 /* Claim toast — appears ONLY after a successful claim, per the mockup;
    nowhere else in the app shows this pattern. */
 .miner-toast {
@@ -1161,198 +1172,128 @@ h3 {
   color: var(--muted);
 }
 
-/* ---------- Streak tab ---------- */
-.streak-page {
-  padding-bottom: 8px;
-}
-
-.streak-summary-card {
+/* --- Streak (Leaderboard.jsx) --- */
+.streak-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
   margin-bottom: 16px;
 }
-
-.streak-fire-icon {
-  background: rgba(240, 89, 40, 0.14);
-  font-size: 22px;
-}
-
-.streak-day-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin: 4px 0 16px;
-}
-
-.streak-day-cell {
+.streak-day {
   position: relative;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  text-align: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
-
-.streak-day-label {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 12px;
+.streak-day.completed {
+  background: rgba(0, 227, 139, 0.12);
+  border-color: var(--accent);
+}
+.streak-day.next {
+  border-color: var(--gold-light, #facc15);
+  box-shadow: 0 0 0 1px var(--gold-light, #facc15);
+}
+.streak-day-num {
+  font-size: 10px;
   color: var(--muted);
-}
-
-.streak-day-points {
-  font-family: var(--font-mono);
+  text-transform: uppercase;
   font-weight: 700;
-  font-size: 13px;
-  color: var(--text);
 }
-
-.streak-day-cell.claimed {
-  background: rgba(0, 227, 139, 0.1);
-  border-color: rgba(0, 227, 139, 0.4);
+.streak-day-points {
+  font-size: 12px;
+  font-weight: 700;
 }
-
-.streak-day-cell.claimed .streak-day-points {
-  color: var(--accent);
-}
-
-.streak-day-cell.current {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold), 0 4px 14px var(--gold-glow);
-}
-
-.streak-day-cell.current .streak-day-points {
-  color: var(--gold-light);
-}
-
 .streak-day-check {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 11px;
+  top: -6px;
+  right: -6px;
+  font-size: 16px !important;
   color: var(--accent);
-  font-weight: 700;
+  background: var(--bg, #0d141e);
+  border-radius: 50%;
 }
 
-.streak-warning {
-  text-align: center;
-  font-size: 12.5px;
-  color: #f0594f;
-  background: rgba(240, 89, 79, 0.1);
-  border: 1px solid rgba(240, 89, 79, 0.3);
-  border-radius: 12px;
-  padding: 8px 12px;
-  margin: 0 0 14px;
-}
-
-.streak-copy {
-  text-align: center;
-  font-size: 13.5px;
-  color: var(--muted);
-  margin: 0 0 14px;
-}
-
-.streak-claim-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.streak-claim-button {
-  width: 100%;
-  padding: 12px 18px;
-  text-align: center;
-}
-
-/* ---------- Leaderboard tab ---------- */
-.leaderboard-page {
-  padding-bottom: 8px;
-}
-
-.leaderboard-me-card {
-  margin-bottom: 16px;
-}
-
-.leaderboard-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-}
-
+/* --- Leaderboard (Leaderboard.jsx) --- */
 .leaderboard-row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
 }
-
-.leaderboard-row:last-child {
-  border-bottom: none;
+.leaderboard-row.leaderboard-you {
+  border-color: var(--gold-light, #facc15);
+  background: rgba(250, 204, 21, 0.08);
 }
-
-.leaderboard-row.me {
-  background: rgba(214, 158, 46, 0.1);
-}
-
 .leaderboard-rank {
-  width: 32px;
-  flex-shrink: 0;
+  width: 36px;
+  font-weight: 800;
   font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 13px;
   color: var(--muted);
-  text-align: center;
-}
-
-.leaderboard-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 13px;
   flex-shrink: 0;
 }
-
 .leaderboard-name {
   flex: 1;
-  font-size: 13.5px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
-
-.leaderboard-you-badge {
-  font-size: 10px;
+.leaderboard-count {
+  font-size: 12px;
+  color: var(--accent);
   font-weight: 700;
-  text-transform: uppercase;
-  color: #1a1300;
-  background: var(--gold-light);
-  padding: 2px 6px;
-  border-radius: 999px;
   flex-shrink: 0;
 }
 
-.leaderboard-count {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: 14px;
+/* --- Stream (Stream.jsx) --- */
+.stream-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stream-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.stream-row-icon {
+  font-size: 18px !important;
+  color: var(--gold-light, #facc15);
+  flex-shrink: 0;
+}
+.stream-row-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.stream-row-text {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stream-row-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+.stream-row-points {
+  font-size: 13px;
+  font-weight: 800;
   color: var(--accent);
   flex-shrink: 0;
 }

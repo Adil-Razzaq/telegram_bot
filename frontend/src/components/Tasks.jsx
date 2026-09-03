@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { showRewardedAd, withConfirmationRetry } from '../monetag';
 import { showAdsgramRewardedAd } from '../adsgram';
-import { playNotificationSound } from '../sound';
 
 // Existing tasks store emoji icons (e.g. "🐦"); the new design uses
 // Material Symbols ligature names (e.g. "chat_bubble"). This renders
@@ -67,7 +66,6 @@ export default function Tasks({ onBalanceChange }) {
     try {
       const result = await api.claimTask(task.id);
       onBalanceChange(result.main_balance);
-      playNotificationSound();
       await refresh();
     } catch (e) {
       setError(e.message);
@@ -89,7 +87,6 @@ export default function Tasks({ onBalanceChange }) {
       if (nonce) await showRewardedAd(nonce);
       const result = await withConfirmationRetry(() => api.claimAdTask(task.id, nonce));
       onBalanceChange(result.main_balance);
-      playNotificationSound();
       await refresh();
     } catch (e) {
       setError(e.message);
@@ -112,7 +109,6 @@ export default function Tasks({ onBalanceChange }) {
       }
       const result = await withConfirmationRetry(() => api.claimAdWatch(network, nonce));
       onBalanceChange(result.main_balance);
-      playNotificationSound();
       await refreshAdWatch();
     } catch (e) {
       setError(e.message);

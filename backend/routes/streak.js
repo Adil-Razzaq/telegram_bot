@@ -13,13 +13,9 @@ router.get('/status', telegramAuth, async (req, res) => {
   }
 });
 
-router.post('/prepare', telegramAuth, async (req, res) => {
-  const { network } = req.body;
-  if (network !== 'monetag' && network !== 'adsgram') {
-    return res.status(400).json({ ok: false, error: "network must be 'monetag' or 'adsgram'" });
-  }
+router.post('/prepare-claim', telegramAuth, async (req, res) => {
   try {
-    const nonce = await prepareClaim({ telegramId: req.telegramUser.id, network });
+    const nonce = await prepareClaim({ telegramId: req.telegramUser.id });
     res.json({ ok: true, nonce });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -27,12 +23,9 @@ router.post('/prepare', telegramAuth, async (req, res) => {
 });
 
 router.post('/claim', telegramAuth, async (req, res) => {
-  const { network, nonce } = req.body;
-  if (network !== 'monetag' && network !== 'adsgram') {
-    return res.status(400).json({ ok: false, error: "network must be 'monetag' or 'adsgram'" });
-  }
+  const { nonce } = req.body;
   try {
-    const result = await claim({ telegramId: req.telegramUser.id, network, nonce });
+    const result = await claim({ telegramId: req.telegramUser.id, nonce });
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });

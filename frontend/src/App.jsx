@@ -4,9 +4,9 @@ import Tasks from './components/Tasks';
 import SpinWheel from './components/SpinWheel';
 import Friends from './components/Friends';
 import Wallet from './components/Wallet';
-import AutoAds from './components/AutoAds';
-import Streak from './components/Streak';
+import Stream from './components/Stream';
 import Leaderboard from './components/Leaderboard';
+import AutoAds from './components/AutoAds';
 import { api } from './api';
 import { initMonetag } from './monetag';
 import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from './tonConnect';
@@ -134,23 +134,30 @@ export default function App() {
     <div className="app">
       <AutoAds config={config} />
       <main className="app-main">
-        {tab === 'miner' && (
+        {/* Miner is ALWAYS mounted (not conditionally rendered like the
+            other tabs) — it holds live-ticking, poll-driven state
+            (countdown, accrued amount) that would otherwise reset to a
+            blank "Loading…" flash every time you switch away and back,
+            which reads as "the miner restarted" even though the real
+            server-side progress was never actually lost. Hidden via CSS
+            instead of unmounting. */}
+        <div style={{ display: tab === 'miner' ? 'block' : 'none' }}>
           <Miner
             displayName={displayName}
             mainBalance={mainBalance}
             onBalanceChange={setMainBalance}
             {...walletProps}
           />
-        )}
+        </div>
         {tab === 'tasks' && <Tasks onBalanceChange={setMainBalance} />}
-        {tab === 'streak' && <Streak onBalanceChange={setMainBalance} />}
-        {tab === 'leaderboard' && <Leaderboard />}
         {tab === 'spin' && config?.spin_enabled !== false && (
           <SpinWheel mainBalance={mainBalance} onBalanceChange={setMainBalance} />
         )}
         {tab === 'friends' && (
           <Friends telegramId={telegramId} onBalanceChange={setMainBalance} />
         )}
+        {tab === 'stream' && <Stream />}
+        {tab === 'leaderboard' && <Leaderboard />}
         {tab === 'profile' && (
           <Wallet
             telegramId={telegramId}
@@ -172,14 +179,6 @@ export default function App() {
           <span className="material-symbols-outlined">assignment</span>
           Tasks
         </button>
-        <button className={tab === 'streak' ? 'active' : ''} onClick={() => setTab('streak')}>
-          <span className="material-symbols-outlined">local_fire_department</span>
-          Streak
-        </button>
-        <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>
-          <span className="material-symbols-outlined">leaderboard</span>
-          Ranks
-        </button>
         {config?.spin_enabled !== false && (
           <button className={tab === 'spin' ? 'active' : ''} onClick={() => setTab('spin')}>
             <span className="material-symbols-outlined">casino</span>
@@ -189,6 +188,14 @@ export default function App() {
         <button className={tab === 'friends' ? 'active' : ''} onClick={() => setTab('friends')}>
           <span className="material-symbols-outlined">group</span>
           Friends
+        </button>
+        <button className={tab === 'stream' ? 'active' : ''} onClick={() => setTab('stream')}>
+          <span className="material-symbols-outlined">sensors</span>
+          Stream
+        </button>
+        <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>
+          <span className="material-symbols-outlined">leaderboard</span>
+          Ranks
         </button>
         <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}>
           <span className="material-symbols-outlined">person</span>

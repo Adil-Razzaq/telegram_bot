@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { withConfirmationRetry } from '../monetag';
 import { showActionAd } from '../adNetwork';
-import { playNotificationSound } from '../sound';
 
 // Colors/positions stay client-side (purely visual) — alternating
 // teal/gold so the wheel reads as one cohesive design instead of a
@@ -88,7 +87,6 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       setTimeout(() => {
         setLastResult(result);
         onBalanceChange(result.main_balance);
-        if (result.points_won > 0) playNotificationSound();
         setConfig((prev) => (prev ? { ...prev, free_spins_remaining: result.free_spins_remaining } : prev));
         setSpinning(false);
       }, 4000);
@@ -101,7 +99,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
   return (
     <div className="spin-wheel-container">
       <h2 className="page-title">Spin</h2>
-      <p className="page-subtitle">Spin the wheel and win ADLX — or watch a short ad for a free spin</p>
+      <p className="page-subtitle">Watch a short ad, spin the wheel, win ADLX</p>
 
       <div className="spin-wheel-frame">
         <div className="spin-wheel-wrap">
@@ -147,7 +145,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
           : isFreeSpin
           ? 'Watch ad & Spin (Free)'
           : canAfford
-          ? `Spin (${entryFee} ADLX)`
+          ? `Watch ad & Spin (${entryFee} ADLX)`
           : 'Not enough ADLX'}
       </button>
 

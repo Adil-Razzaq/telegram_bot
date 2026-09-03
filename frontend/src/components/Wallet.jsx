@@ -32,6 +32,21 @@ export default function Wallet({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  // Public proof-of-payout board (see withdrawalService.js's
+  // getRecentPayouts) — always visible, not tucked behind a toggle like
+  // History above, since the whole point is for anyone (including an ad
+  // network's moderation reviewer) to see real payouts happened without
+  // extra clicks.
+  const [payouts, setPayouts] = useState(null);
+
+  async function loadPayouts() {
+    try {
+      const res = await api.recentPayouts();
+      setPayouts(res.payouts);
+    } catch (e) {
+      // Non-fatal — rest of the wallet page still works if this fails.
+    }
+  }
 
   async function loadHistory() {
     try {
@@ -45,6 +60,9 @@ export default function Wallet({
 
   useEffect(() => {
     api.getConfig().then(setConfig).catch(() => {});
+    loadPayouts();
+    const interval = setInterval(loadPayouts, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Keep the withdrawal address field pre-filled with whatever's
@@ -173,6 +191,33 @@ export default function Wallet({
           {mainBalance.toLocaleString()} ADLX
         </span>
       </div>
+
+      <h3 style={{ textAlign: 'center' }}>Live Payouts</h3>
+      <p className="wallet-empty" style={{ marginTop: -8 }}>
+        Real withdrawals, verifiable on-chain — this is not a demo.
+      </p>
+      {payouts === null ? (
+        <p className="wallet-empty">Loading…</p>
+      ) : payouts.length === 0 ? (
+        <p className="wallet-empty">No completed payouts yet.</p>
+      ) : (
+        <ul className="wallet-history">
+          {payouts.map((p) => (
+            <li key={p.tx_hash} className="wallet-history-item status-completed">
+              <div>
+                <strong>{p.display_name}</strong> — ${p.amount_usd.toFixed(2)} ({p.points} ADLX)
+                <span className="status-badge status-completed">PAID</span>
+              </div>
+              <div className="wallet-history-meta">
+                {new Date(p.processed_at).toLocaleString()}
+                <a href={p.tonviewer_url} target="_blank" rel="noreferrer">
+                  View on Tonviewer
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <h3 style={{ textAlign: 'center' }}>Controls</h3>
 

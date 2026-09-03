@@ -1,57 +1,50 @@
 /**
- * Lightweight notification sound for reward/claim moments (miner claim,
- * streak claim, referral claim, task claim, spin win, daily watch-ad
- * claim). Synthesized with the Web Audio API instead of shipping an
- * mp3 — no extra asset to host, no load-before-play race, and it's
- * always ready by the time a claim resolves.
+ * A short, synthesized two-tone "ding" for success notifications (claim
+ * toasts, streak progress, etc.) — generated via the Web Audio API
+ * rather than an external audio file, so there's nothing to host, no
+ * load-time delay, and no broken-link risk if a CDN/asset path changes.
  *
- * A single shared AudioContext is created lazily on first use (created
- * during a click-driven async flow, which satisfies every browser's
- * autoplay/gesture requirement in practice for Telegram's in-app
- * WebView and normal mobile browsers).
+ * Call it from the SAME click-triggered async flow that shows a
+ * success toast (see Miner.jsx's showToast, Streak.jsx's claim
+ * handler) — browsers require a user gesture to have started the audio
+ * flow, and resume() below covers the common case where that gesture's
+ * context has technically ended by the time an awaited API call
+ * resolves.
  */
 
-let ctx = null;
+let audioCtx = null;
 
 function getContext() {
   if (typeof window === 'undefined') return null;
-  const Ctor = window.AudioContext || window.webkitAudioContext;
-  if (!Ctor) return null;
-  if (!ctx) ctx = new Ctor();
-  return ctx;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!audioCtx) audioCtx = new AudioContextClass();
+  return audioCtx;
 }
 
-// A short two-note "ding-dong" style chime — pleasant, quick (~350ms),
-// distinct from a plain beep. Used for every successful reward claim.
 export function playNotificationSound() {
-  try {
-    const audioCtx = getContext();
-    if (!audioCtx) return;
-    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  // Respects the mute toggle on the Profile tab (Wallet.jsx) — same
+  // localStorage key that toggle already reads/writes, so muting there
+  // silences every call site of this function with no extra wiring.
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('soundOn') === 'false') return;
 
-    const now = audioCtx.currentTime;
-    const notes = [
-      { freq: 880, start: 0, dur: 0.14 }, // A5
-      { freq: 1318.5, start: 0.11, dur: 0.22 }, // E6
-    ];
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 
-    notes.forEach(({ freq, start, dur }) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-
-      const t0 = now + start;
-      gain.gain.setValueAtTime(0, t0);
-      gain.gain.linearRampToValueAtTime(0.18, t0 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t0);
-      osc.stop(t0 + dur + 0.02);
-    });
-  } catch (e) {
-    // Never let a sound failure break a reward flow.
-  }
+  const now = ctx.currentTime;
+  [660, 880].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const startAt = now + i * 0.09;
+    gain.gain.setValueAtTime(0, startAt);
+    gain.gain.linearRampToValueAtTime(0.2, startAt + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startAt);
+    osc.stop(startAt + 0.3);
+  });
 }
