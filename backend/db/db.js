@@ -30,6 +30,11 @@ const COLUMNS_TO_ENSURE = [
   // SQLite forbids non-constant defaults (e.g. date('now')) on ALTER TABLE
   // ADD COLUMN, so this is added plain and backfilled below in migrate().
   { table: 'miner_state', column: 'cycles_reset_date', ddl: 'TEXT' },
+  // Tracks whether the one-per-cycle ad-boost has been used — see
+  // services/minerService.js's prepareBoost/activateBoost. Constant
+  // default (0) is fine for ALTER ADD COLUMN, unlike cycles_reset_date
+  // above.
+  { table: 'miner_state', column: 'boost_active', ddl: 'INTEGER DEFAULT 0' },
   { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
   // Distinguishes which network sent this row now that both Monetag and
   // Adsgram write into the same log table (see routes/bot.js). Constant

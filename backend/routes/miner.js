@@ -1,6 +1,14 @@
 const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
-const { getStatus, prepareStart, startCycle, prepareClaim, claim } = require('../services/minerService');
+const {
+  getStatus,
+  prepareStart,
+  startCycle,
+  prepareClaim,
+  claim,
+  prepareBoost,
+  activateBoost,
+} = require('../services/minerService');
 
 const router = express.Router();
 
@@ -47,6 +55,26 @@ router.post('/claim', telegramAuth, async (req, res) => {
   try {
     const result = await claim({ telegramId: req.telegramUser.id, nonce });
     res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Boost: same two-step ad-gated pattern as start/claim, once per cycle.
+router.post('/prepare-boost', telegramAuth, async (req, res) => {
+  try {
+    const nonce = await prepareBoost({ telegramId: req.telegramUser.id });
+    res.json({ ok: true, nonce });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/boost', telegramAuth, async (req, res) => {
+  const { nonce } = req.body;
+  try {
+    const status = await activateBoost({ telegramId: req.telegramUser.id, nonce });
+    res.json({ ok: true, ...status });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }

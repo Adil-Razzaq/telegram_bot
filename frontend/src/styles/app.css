@@ -815,6 +815,42 @@ h3 {
   line-height: 1.5;
 }
 
+/* Cycle-complete state: the coin stops its "actively mining" pulse
+   (rings removed by the component, not just hidden here) and gets a
+   steadier, brighter glow instead — visually distinct from "still
+   counting down" per the fix for the miner looking like it runs forever. */
+.miner-coin-complete .miner-coin-glow {
+  background: radial-gradient(circle, rgba(0, 227, 139, 0.55), transparent 70%);
+  animation: minerCompletePulse 1.8s ease-in-out infinite;
+}
+@keyframes minerCompletePulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.miner-copy-complete {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.miner-boost-button {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  max-width: 320px;
+  margin-top: 4px;
+}
+
+.miner-boost-button:disabled {
+  border-color: var(--surface-2);
+  color: var(--muted);
+}
+
 /* Claim toast — appears ONLY after a successful claim, per the mockup;
    nowhere else in the app shows this pattern. */
 .miner-toast {

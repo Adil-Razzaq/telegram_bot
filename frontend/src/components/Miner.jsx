@@ -34,6 +34,7 @@ export default function Miner({
   const [liveAccrued, setLiveAccrued] = useState(0);
   const [starting, setStarting] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [boosting, setBoosting] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -68,11 +69,15 @@ export default function Miner({
       const { accrued, rate, syncedAt } = syncRef.current;
       if (rate > 0) {
         const elapsedSinceSync = (Date.now() - syncedAt) / 1000;
-        setLiveAccrued(accrued + rate * elapsedSinceSync);
+        // Capped at the cycle's full point target — otherwise once the
+        // timer hits zero this local animation just keeps climbing past
+        // the true value until the next 15s poll corrects it.
+        const cap = status?.current_cycle_points ?? Infinity;
+        setLiveAccrued(Math.min(cap, accrued + rate * elapsedSinceSync));
       }
     }, 150); // smooth-ish ticking without being wasteful
     return () => clearInterval(tickRef.current);
-  }, []);
+  }, [status?.current_cycle_points]);
 
   function showToast(points) {
     setToast(points);
@@ -121,6 +126,30 @@ export default function Miner({
     }
   }
 
+  // Once per cycle: watch an ad to compress the REMAINING time by
+  // status.boost_multiplier (server-controlled, e.g. 3x) — same total
+  // reward for this cycle, just reached sooner. Server re-derives the
+  // new cycle_ends_at itself; refreshStatus() below picks up the
+  // shortened countdown and the faster rate_per_second automatically.
+  async function handleBoost() {
+    if (boosting) return;
+    setBoosting(true);
+    setError(null);
+    try {
+      const { nonce } = await api.prepareMinerBoost();
+      await showActionAd(nonce, config);
+      const result = await withConfirmationRetry(() => api.activateMinerBoost(nonce));
+      setStatus(result);
+      setSecondsLeft(result.seconds_remaining_in_cycle);
+      setLiveAccrued(result.accrued_now);
+      syncRef.current = { accrued: result.accrued_now, rate: result.rate_per_second, syncedAt: Date.now() };
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBoosting(false);
+    }
+  }
+
   if (!status) {
     return <div className="miner-container">Loading miner…</div>;
   }
@@ -130,6 +159,13 @@ export default function Miner({
   const pool = liveAccrued;
   const assets = holding + pool;
   const isRunning = status.status === 'running';
+  // Client-side derived from the locally-ticked countdown (not just
+  // status.cycle_complete from the last poll) so the UI flips the
+  // instant the timer visually hits zero, rather than lagging up to the
+  // 15s poll interval. Payout is always server-recomputed at claim time
+  // regardless, so there's no trust issue in acting on this early.
+  const cycleComplete = isRunning && secondsLeft <= 0;
+  const activelyRunning = isRunning && !cycleComplete;
   const canRestart = status.status === 'idle' && status.cycles_remaining_today > 0;
   const outOfCycles = status.status === 'idle' && status.cycles_remaining_today === 0;
 
@@ -186,20 +222,29 @@ export default function Miner({
         <div className="miner-live-rate num">+{liveAccrued.toFixed(4)}</div>
       )}
 
-      <div className="miner-coin-wrap">
+      <div className={`miner-coin-wrap${cycleComplete ? ' miner-coin-complete' : ''}`}>
         <div className="miner-coin-glow" />
-        <div className="miner-coin-ring r1" />
-        <div className="miner-coin-ring r2" />
-        <div className="miner-coin-ring r3" />
+        {activelyRunning && (
+          <>
+            <div className="miner-coin-ring r1" />
+            <div className="miner-coin-ring r2" />
+            <div className="miner-coin-ring r3" />
+          </>
+        )}
         <div className="miner-coin">
           <img src="/coin.png" alt="Coin" />
         </div>
       </div>
 
-      {isRunning && (
+      {activelyRunning && (
         <p className="miner-copy">
           {formatDuration(secondsLeft)} left in this cycle — claim anytime for what's accrued so far,
           or wait for it to finish.
+        </p>
+      )}
+      {cycleComplete && (
+        <p className="miner-copy miner-copy-complete">
+          Cycle complete — {liveAccrued.toFixed(4)} ADLX ready. Tap below to claim it.
         </p>
       )}
       {canRestart && (
@@ -214,6 +259,11 @@ export default function Miner({
         </p>
       )}
 
+      {status.can_boost && (
+        <button className="miner-boost-button" onClick={handleBoost} disabled={boosting}>
+          {boosting ? 'Loading…' : `⚡ Watch ad for ${status.boost_multiplier}x speed`}
+        </button>
+      )}
       {isRunning && (
         <button className="miner-claim-button" onClick={handleClaim} disabled={claiming}>
           {claiming ? 'Claiming…' : 'Watch ad & Claim'}

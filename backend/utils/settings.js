@@ -22,6 +22,10 @@ const SETTING_DEFS = {
   miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
   miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
   miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js
+  // How much watching a Boost ad compresses the REMAINING time in the
+  // current cycle (e.g. 3 = 3x faster to the same total reward). One
+  // use per cycle — see minerService.js's prepareBoost/activateBoost.
+  miner_boost_multiplier: { type: 'number', default: 3, min: 1 },
   spin_entry_fee: { type: 'number', default: 100, min: 0 }, // charged per spin once free spins are used up
   spin_free_spins: { type: 'number', default: 3, min: 0 }, // first N spins for a new user skip the entry fee (still requires watching an ad)
   spin_payout_1: { type: 'number', default: 10, min: 0 },

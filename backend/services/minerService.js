@@ -15,6 +15,19 @@ const { getAllSettings } = require('../utils/settings');
  *     watching an ad, and ends that cycle (status -> idle) whether it
  *     was claimed early or after completion — the user then has to tap
  *     Start (+ ad) again for the next cycle.
+ *   - Once the cycle's timer reaches zero, accrual is capped (always
+ *     was) AND getStatus reports cycle_complete: true so the frontend
+ *     can stop showing it as "running" and clearly prompt to Claim
+ *     instead of leaving it looking like mining is still in progress.
+ *     Nothing forces an auto-claim — that still costs an ad, same as
+ *     any other claim — this is a display-state fix, not a payout one.
+ *   - Ad-gated Boost: once per cycle, watching an extra ad compresses
+ *     the REMAINING time in the current cycle by miner_boost_multiplier
+ *     (default 3x) — same total reward for that cycle, just reached
+ *     sooner. Implemented by shrinking cycle_ends_at itself (see
+ *     activateBoost), so accruedNow's existing elapsed/total-from-
+ *     stored-timestamps math handles the speed-up with no special
+ *     casing needed.
  *   - Capped at `miner_cycles_per_day` starts per calendar day.
  *   - `miner_daily_points` is split across the day's cycles with a
  *     remainder-safe distribution so the total always adds up to
@@ -37,7 +50,7 @@ async function getRow(telegramId) {
   await ensureMinerRow(telegramId);
   await rolloverMinerCyclesIfNeeded(telegramId);
   const res = await client.execute({
-    sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today, cycles_reset_date
+    sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today, cycles_reset_date, boost_active
           FROM miner_state WHERE telegram_id = ?`,
     args: [telegramId],
   });
@@ -49,12 +62,23 @@ function currentCyclePoints(row, settings) {
   return pointsForCycleIndex(row.cycles_completed_today, settings.miner_daily_points, settings.miner_cycles_per_day);
 }
 
+// totalSeconds comes from the ROW's own stored start/end timestamps, not
+// straight from settings.miner_cycle_hours — that's what lets Boost
+// (which shrinks cycle_ends_at) speed up accrual with no extra math
+// here: a compressed window just means elapsed/total reaches 1.0 sooner.
+function cycleTotalSeconds(row) {
+  const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
+  const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
+  return Math.max(1, (endsAt - startedAt) / 1000);
+}
+
 // Prorated accrual RIGHT NOW for a running cycle — floored, so a claim
 // can never pay out more than has genuinely elapsed. Capped at the full
-// cycle amount once elapsed time reaches the cycle length.
+// cycle amount once elapsed time reaches the cycle length (including a
+// boosted, shrunk length).
 function accruedNow(row, settings) {
   if (row.status !== 'running') return 0;
-  const totalSeconds = settings.miner_cycle_hours * 3600;
+  const totalSeconds = cycleTotalSeconds(row);
   const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
   const elapsedSeconds = Math.max(0, Math.min(totalSeconds, (Date.now() - startedAt) / 1000));
   const cyclePoints = currentCyclePoints(row, settings);
@@ -63,11 +87,11 @@ function accruedNow(row, settings) {
 
 async function getStatus({ telegramId }) {
   const [row, settings] = await Promise.all([getRow(telegramId), getAllSettings()]);
-  const { miner_daily_points, miner_cycles_per_day, miner_cycle_hours } = settings;
+  const { miner_daily_points, miner_cycles_per_day, miner_boost_multiplier } = settings;
 
   const cyclesRemaining = Math.max(0, miner_cycles_per_day - row.cycles_completed_today);
   const cyclePoints = currentCyclePoints(row, settings);
-  const totalSeconds = miner_cycle_hours * 3600;
+  const totalSeconds = row.status === 'running' ? cycleTotalSeconds(row) : 0;
 
   let secondsRemainingInCycle = 0;
   if (row.status === 'running') {
@@ -80,19 +104,29 @@ async function getStatus({ telegramId }) {
     cycle_started_at: row.cycle_started_at,
     cycle_ends_at: row.cycle_ends_at,
     seconds_remaining_in_cycle: secondsRemainingInCycle,
+    // True once a running cycle's timer has hit zero but the user
+    // hasn't claimed yet — frontend uses this to stop showing the
+    // "mining in progress" state and prompt Claim instead.
+    cycle_complete: row.status === 'running' && secondsRemainingInCycle <= 0,
     cycles_completed_today: row.cycles_completed_today,
     cycles_remaining_today: cyclesRemaining,
     cycles_per_day: miner_cycles_per_day,
-    cycle_hours: miner_cycle_hours,
+    cycle_hours: settings.miner_cycle_hours,
     // Current cycle's full target, and the rate/second toward it — lets
     // the frontend animate a live-ticking number between polls, without
-    // hitting the server every second just to move a counter.
+    // hitting the server every second just to move a counter. Rate
+    // reflects any active boost automatically since totalSeconds does.
     current_cycle_points: row.status === 'running' ? cyclePoints : 0,
     rate_per_second: row.status === 'running' ? cyclePoints / totalSeconds : 0,
     accrued_now: accruedNow(row, settings),
     next_cycle_points: cyclesRemaining > 0 ? cyclePoints : 0,
     can_start: row.status === 'idle' && cyclesRemaining > 0,
     daily_points: miner_daily_points,
+    boost_active: !!row.boost_active,
+    boost_multiplier: miner_boost_multiplier,
+    // Boost only makes sense while genuinely still counting down — once
+    // the cycle is complete there's nothing left to speed up.
+    can_boost: row.status === 'running' && !row.boost_active && secondsRemainingInCycle > 0,
   };
 }
 
@@ -131,7 +165,7 @@ async function startCycle({ telegramId, nonce }) {
   await client.execute({
     sql: `UPDATE miner_state
           SET status = 'running', cycle_started_at = CURRENT_TIMESTAMP,
-              cycle_ends_at = datetime('now', '+' || ? || ' hours')
+              cycle_ends_at = datetime('now', '+' || ? || ' hours'), boost_active = 0
           WHERE telegram_id = ?`,
     args: [settings.miner_cycle_hours, telegramId],
   });
@@ -162,7 +196,7 @@ async function claim({ telegramId, nonce }) {
       args: [telegramId],
     });
     const rowRes = await tx.execute({
-      sql: `SELECT status, cycle_started_at, cycles_completed_today FROM miner_state WHERE telegram_id = ?`,
+      sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today FROM miner_state WHERE telegram_id = ?`,
       args: [telegramId],
     });
     const row = rowRes.rows[0];
@@ -175,7 +209,8 @@ async function claim({ telegramId, nonce }) {
 
     // Recomputed at claim time, inside the transaction — not trusted
     // from anything the client sent, so there's no way to claim more
-    // than has genuinely elapsed regardless of what the frontend shows.
+    // than has genuinely elapsed regardless of what the frontend shows
+    // (including under a boosted, shrunk cycle window).
     const earnedPoints = accruedNow(row, settings);
 
     await tx.execute({
@@ -185,7 +220,7 @@ async function claim({ telegramId, nonce }) {
     await tx.execute({
       sql: `UPDATE miner_state
             SET status = 'idle', cycle_started_at = NULL, cycle_ends_at = NULL,
-                cycles_completed_today = cycles_completed_today + 1
+                cycles_completed_today = cycles_completed_today + 1, boost_active = 0
             WHERE telegram_id = ?`,
       args: [telegramId],
     });
@@ -207,4 +242,81 @@ async function claim({ telegramId, nonce }) {
   }
 }
 
-module.exports = { getStatus, prepareStart, startCycle, prepareClaim, claim };
+// --- Boost: watch an ad to compress the REMAINING time in the current
+// cycle by miner_boost_multiplier. Same total reward, reached sooner —
+// see cycleTotalSeconds/accruedNow above for how the speed-up actually
+// takes effect once cycle_ends_at is shrunk below.
+
+async function prepareBoost({ telegramId }) {
+  const row = await getRow(telegramId);
+  if (row.status !== 'running') {
+    const err = new Error('Miner is not running — tap Start first');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (row.boost_active) {
+    const err = new Error('Boost is already active for this cycle');
+    err.statusCode = 400;
+    throw err;
+  }
+  const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
+  if (endsAt <= Date.now()) {
+    const err = new Error('This cycle has already finished — claim it to start a new one');
+    err.statusCode = 400;
+    throw err;
+  }
+  return startAdEventIfRequired({ telegramId, action: 'miner_boost' });
+}
+
+async function activateBoost({ telegramId, nonce }) {
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_boost' });
+
+  const settings = await getAllSettings();
+  const tx = await client.transaction('write');
+  try {
+    const rowRes = await tx.execute({
+      sql: `SELECT status, cycle_ends_at, boost_active FROM miner_state WHERE telegram_id = ?`,
+      args: [telegramId],
+    });
+    const row = rowRes.rows[0];
+
+    if (row.status !== 'running') {
+      const err = new Error('Miner is not running — tap Start first');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (row.boost_active) {
+      const err = new Error('Boost is already active for this cycle');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const now = Date.now();
+    const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
+    const remainingMs = endsAt - now;
+    if (remainingMs <= 0) {
+      const err = new Error('This cycle has already finished — claim it to start a new one');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const newRemainingMs = remainingMs / settings.miner_boost_multiplier;
+    // Match SQLite's own datetime() output format ('YYYY-MM-DD HH:MM:SS',
+    // implicitly UTC) so this stays consistent with every other
+    // cycle_ends_at write and read (all of which append/expect 'Z').
+    const newEndsAt = new Date(now + newRemainingMs).toISOString().slice(0, 19).replace('T', ' ');
+
+    await tx.execute({
+      sql: `UPDATE miner_state SET cycle_ends_at = ?, boost_active = 1 WHERE telegram_id = ?`,
+      args: [newEndsAt, telegramId],
+    });
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    throw err;
+  }
+
+  return getStatus({ telegramId });
+}
+
+module.exports = { getStatus, prepareStart, startCycle, prepareClaim, claim, prepareBoost, activateBoost };
