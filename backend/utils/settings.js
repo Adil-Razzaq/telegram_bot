@@ -38,10 +38,23 @@ const SETTING_DEFS = {
   // actions proceed WITHOUT requiring an ad — see each service's use of
   // this flag before calling startAdEvent/consumeAdEvent.
   action_ads_enabled: { type: 'boolean', default: true },
+  // Which network serves those SAME reward-gated actions (spin, miner
+  // start/claim, referral claim) — switchable independent of the
+  // passive auto-ad's network below. Does NOT cover the two dedicated
+  // task-bar watch-ad slots (those are explicitly one-of-each by
+  // design, see adWatchService.js) or admin-created generic watch_ad
+  // tasks (those stay Monetag-only — see the note in taskService.js).
+  action_ads_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
 
   // Passive auto-ad (Monetag In-App Interstitial or Adsgram shown on a
   // timer) — see frontend/src/components/AutoAds.jsx.
   auto_ad_enabled: { type: 'boolean', default: true },
+  // Separate from auto_ad_enabled above: that's the overall kill switch
+  // for the whole passive system; this one just controls whether the
+  // very FIRST ad (the one auto_ad_first_delay_seconds after open)
+  // fires. Off = skip that first one but keep the recurring
+  // interval-based ones running on schedule — see AutoAds.jsx.
+  auto_ad_first_enabled: { type: 'boolean', default: true },
   auto_ad_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
   auto_ad_first_delay_seconds: { type: 'number', default: 30, min: 1 },
   auto_ad_interval_seconds: { type: 'number', default: 45, min: 1 },

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { showRewardedAd, withConfirmationRetry } from '../monetag';
+import { withConfirmationRetry } from '../monetag';
+import { showActionAd } from '../adNetwork';
 
 // Colors/positions stay client-side (purely visual) — alternating
 // teal/gold so the wheel reads as one cohesive design instead of a
@@ -27,6 +28,10 @@ function wedgePath(startAngle, endAngle) {
 
 export default function SpinWheel({ mainBalance, onBalanceChange }) {
   const [config, setConfig] = useState(null);
+  // Separate from `config` above (that's spin-specific: payouts, entry
+  // fee, free spins) — this is the global /user/config, used only for
+  // action_ads_network / adsgram_block_id here.
+  const [adConfig, setAdConfig] = useState(null);
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [lastResult, setLastResult] = useState(null);
@@ -37,6 +42,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
       .spinConfig()
       .then(setConfig)
       .catch((e) => setError(e.message));
+    api.getConfig().then(setAdConfig).catch(() => {});
   }, []);
 
   const segments = useMemo(() => {
@@ -69,7 +75,7 @@ export default function SpinWheel({ mainBalance, onBalanceChange }) {
     setSpinning(true);
     try {
       const { nonce } = await api.prepareSpin();
-      if (nonce) await showRewardedAd(nonce);
+      await showActionAd(nonce, adConfig);
       const result = await withConfirmationRetry(() => api.playSpin(nonce));
 
       const targetIndex = segments.findIndex((s) => s.index === result.segment_index);

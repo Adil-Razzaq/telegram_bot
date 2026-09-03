@@ -104,19 +104,34 @@ async function consumeAdEvent({ nonce, telegramId, action }) {
 // per their docs it's a plain GET with only the Telegram user ID
 // substituted in. So instead of matching an exact nonce (confirmAdEvent
 // above), this confirms the OLDEST still-pending event for this exact
-// user+action. Safe under normal single-tab use (a user only has one
-// truly pending Adsgram ad-watch at a time); the tradeoff, same class as
-// the one already noted in playSpin, is a user rapid-firing multiple
-// tabs could in theory confirm out of order — not exploitable for extra
-// reward, just a possible UX mixup, so acceptable here.
+// user (+ action, when given). Safe under normal single-tab use (a user
+// only has one truly pending Adsgram ad-watch at a time); the tradeoff,
+// same class as the one already noted in playSpin, is a user
+// rapid-firing multiple tabs could in theory confirm out of order — not
+// exploitable for extra reward, just a possible UX mixup, so acceptable
+// here.
+//
+// `action` is OPTIONAL: pass it for the two dedicated task-bar watch-ad
+// slots (each gets its own Adsgram block, so each has its own Reward
+// Url with a distinct :action path segment — see routes/bot.js).
+// Omit it for the shared action_ads_network='adsgram' case (spin, miner
+// start/claim, referral claim all reuse ONE adsgram_block_id, and
+// Adsgram only allows ONE Reward Url per block — so there's no way to
+// route by action there; matching "oldest pending for this user, any
+// action" is the correct behavior since a user can only be mid-flow on
+// one of these at a time in practice).
 async function confirmOldestPendingByUser({ telegramId, action, estimatedPrice = 0 }) {
-  const res = await client.execute({
-    sql: `SELECT nonce FROM pending_ad_events
-          WHERE telegram_id = ? AND action = ? AND status = 'pending'
-            AND created_at >= datetime('now', '-${NONCE_TTL_MINUTES} minutes')
-          ORDER BY created_at ASC LIMIT 1`,
-    args: [telegramId, action],
-  });
+  const sql = action
+    ? `SELECT nonce FROM pending_ad_events
+       WHERE telegram_id = ? AND action = ? AND status = 'pending'
+         AND created_at >= datetime('now', '-${NONCE_TTL_MINUTES} minutes')
+       ORDER BY created_at ASC LIMIT 1`
+    : `SELECT nonce FROM pending_ad_events
+       WHERE telegram_id = ? AND status = 'pending'
+         AND created_at >= datetime('now', '-${NONCE_TTL_MINUTES} minutes')
+       ORDER BY created_at ASC LIMIT 1`;
+  const args = action ? [telegramId, action] : [telegramId];
+  const res = await client.execute({ sql, args });
   const row = res.rows[0];
   if (!row) return false;
   return confirmAdEvent({ nonce: row.nonce, estimatedPrice });

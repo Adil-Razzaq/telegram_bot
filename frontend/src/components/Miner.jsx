@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { showRewardedAd, withConfirmationRetry } from '../monetag';
+import { withConfirmationRetry } from '../monetag';
+import { showActionAd } from '../adNetwork';
 
 function formatDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
@@ -85,7 +86,7 @@ export default function Miner({
     setError(null);
     try {
       const { nonce } = await api.prepareMinerStart();
-      if (nonce) await showRewardedAd(nonce);
+      await showActionAd(nonce, config);
       const result = await withConfirmationRetry(() => api.startMiner(nonce));
       setStatus(result);
       setSecondsLeft(result.seconds_remaining_in_cycle);
@@ -108,7 +109,7 @@ export default function Miner({
     setError(null);
     try {
       const { nonce } = await api.prepareMinerClaim();
-      if (nonce) await showRewardedAd(nonce);
+      await showActionAd(nonce, config);
       const result = await withConfirmationRetry(() => api.minerClaim(nonce));
       onBalanceChange(result.main_balance);
       showToast(result.earned_points);

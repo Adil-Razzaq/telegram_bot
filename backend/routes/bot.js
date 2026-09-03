@@ -172,21 +172,32 @@ router.get('/monetag-postback/:secret', async (req, res) => {
   res.sendStatus(200);
 });
 
-// Adsgram calls this after a user watches an ad — set this exact URL as
+// Adsgram calls this after a user watches an ad — set the exact URL as
 // the "Reward Url" for the relevant block in your Adsgram partner
-// dashboard (https://partner.adsgram.ai/), one per action you gate with
-// Adsgram (e.g. one block for the watch-ad task, a separate block if you
-// ever gate something else with it):
+// dashboard (https://partner.adsgram.ai/). Per Adsgram's own docs this
+// is the ENTIRE payload they send: a GET with only [userId] substituted,
+// no nonce, no ad value — see confirmOldestPendingByUser in
+// utils/monetagAds.js for how confirmation is matched without a nonce.
 //
-//   https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_SECRET/adsgram_task?userid=[userId]
+// Two variants, because there are two different setups depending on the
+// admin panel's settings:
 //
-// Per Adsgram's own docs this is the ENTIRE payload they send — a GET
-// with only [userId] substituted, no nonce, no ad value. `:action` is a
-// literal path segment WE chose (not an Adsgram macro) so one route can
-// serve multiple gated actions without ambiguity — see
-// confirmOldestPendingByUser in utils/monetagAds.js for how confirmation
-// is matched without a nonce.
-router.get('/adsgram-postback/:secret/:action', async (req, res) => {
+//   1. WITH an action — for the two dedicated task-bar watch-ad slots,
+//      which each get their OWN Adsgram block (Settings →
+//      adsgram_block_id is that one), so each can have its own distinct
+//      Reward Url:
+//        https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_SECRET/daily_watch:adsgram?userid=[userId]
+//
+//   2. WITHOUT an action — for when Settings → action_ads_network is set
+//      to 'adsgram', which routes spin/miner start/miner claim/referral
+//      claim ALL through that SAME single adsgram_block_id. Adsgram only
+//      allows one Reward Url per block, so there's no way to give each
+//      of those four actions its own URL — this variant just confirms
+//      whichever action is oldest-pending for that user, which is
+//      correct since a user can only be mid-flow on one of them at a
+//      time in normal use:
+//        https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_SECRET?userid=[userId]
+async function handleAdsgramPostback(req, res, action) {
   const expected = process.env.ADSGRAM_VERIFY_SECRET || '';
   const provided = req.params.secret || '';
   const same =
@@ -194,10 +205,9 @@ router.get('/adsgram-postback/:secret/:action', async (req, res) => {
     crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
   if (!expected || !same) return res.sendStatus(404);
 
-  const { action } = req.params;
   const telegramId = Number(req.query.userid);
 
-  console.log('Adsgram postback received:', { action, userid: req.query.userid });
+  console.log('Adsgram postback received:', { action: action || '(any)', userid: req.query.userid });
 
   let matched = false;
   if (Number.isInteger(telegramId)) {
@@ -209,13 +219,16 @@ router.get('/adsgram-postback/:secret/:action', async (req, res) => {
     await client.execute({
       sql: `INSERT INTO ad_postback_log (network, telegram_id_macro, event_type, matched_pending_event)
             VALUES ('adsgram', ?, ?, ?)`,
-      args: [req.query.userid || null, action, matched ? 1 : 0],
+      args: [req.query.userid || null, action || '(any)', matched ? 1 : 0],
     });
   } catch (err) {
     console.error('Failed to write ad_postback_log:', err);
   }
 
   res.sendStatus(200);
-});
+}
+
+router.get('/adsgram-postback/:secret/:action', (req, res) => handleAdsgramPostback(req, res, req.params.action));
+router.get('/adsgram-postback/:secret', (req, res) => handleAdsgramPostback(req, res, undefined));
 
 module.exports = router;

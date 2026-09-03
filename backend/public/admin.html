@@ -117,9 +117,16 @@
     <p class="muted" style="margin-top:14px; padding-top:14px; border-top:1px solid #222">
       After setting an Adsgram Block ID above, go to your
       <a href="https://partner.adsgram.ai/" target="_blank" rel="noopener">Adsgram partner dashboard</a>
-      → that block's Reward Url, and set it to (replace YOUR_DOMAIN and YOUR_ADSGRAM_SECRET with your real values from .env's ADSGRAM_VERIFY_SECRET):<br />
+      → that block's Reward Url. Replace YOUR_DOMAIN and YOUR_ADSGRAM_SECRET with your real values (secret is
+      ADSGRAM_VERIFY_SECRET in .env):<br />
+      • For the task-bar "Watch an Adsgram Ad" slot:<br />
       <code>https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_ADSGRAM_SECRET/daily_watch:adsgram?userid=[userId]</code><br />
-      Monetag's Postback URL (set per-zone in their dashboard) stays exactly as configured before — it isn't affected by any setting on this page.
+      • If "Network for reward actions" above is set to Adsgram (spin/miner/referral all share this ONE block,
+      since Adsgram allows only one Reward Url per block — use the URL WITHOUT an action segment):<br />
+      <code>https://YOUR_DOMAIN/bot/adsgram-postback/YOUR_ADSGRAM_SECRET?userid=[userId]</code><br />
+      If you want BOTH of the above at once, you'll need two separate Adsgram blocks (and two Block IDs) — this
+      single Adsgram Block ID setting is currently shared by both features.<br />
+      Monetag's Postback URL (set per-zone in their dashboard) is unaffected by anything on this page.
     </p>
   </div>
 
@@ -297,7 +304,9 @@
     spin_payout_5: 'Spin: payout slot 5',
     spin_payout_6: 'Spin: payout slot 6',
     action_ads_enabled: 'Require an ad for reward actions (spin/miner/referral/tasks)',
-    auto_ad_enabled: 'Passive auto-ad enabled',
+    action_ads_network: 'Network for reward actions (spin/miner/referral)',
+    auto_ad_enabled: 'Passive auto-ad enabled (overall)',
+    auto_ad_first_enabled: 'Passive auto-ad: show the first one (on open)',
     auto_ad_network: 'Auto-ad network',
     auto_ad_first_delay_seconds: 'Auto-ad: first show, seconds after app open',
     auto_ad_interval_seconds: 'Auto-ad: repeat interval (seconds)',

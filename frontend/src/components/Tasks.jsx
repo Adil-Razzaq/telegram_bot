@@ -143,7 +143,7 @@ export default function Tasks({ onBalanceChange }) {
             <div className="task-info">
               <span className="task-title">Watch a Monetag Ad</span>
               <span className="task-reward">
-                {adWatchStatus.monetag.reward_percent}% of ad value · {adWatchStatus.monetag.watched_today}/
+                Bonus reward · {adWatchStatus.monetag.watched_today}/
                 {adWatchStatus.monetag.daily_limit} today
               </span>
             </div>

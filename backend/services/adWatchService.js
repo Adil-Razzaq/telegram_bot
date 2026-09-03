@@ -44,7 +44,10 @@ async function getStatus({ telegramId }) {
       watched_today: counts.monetag,
       daily_limit: settings.watch_ad_daily_limit_monetag,
       can_watch: counts.monetag < settings.watch_ad_daily_limit_monetag,
-      reward_percent: settings.monetag_task_reward_percent,
+      // reward_percent deliberately NOT included here — it's an internal
+      // revenue-share detail (see claimWatch below, which still uses
+      // settings.monetag_task_reward_percent directly), not something
+      // the client/API response should expose, even unused in the UI.
     },
     adsgram: {
       watched_today: counts.adsgram,

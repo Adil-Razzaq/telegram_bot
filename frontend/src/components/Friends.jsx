@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { showRewardedAd, withConfirmationRetry } from '../monetag';
+import { withConfirmationRetry } from '../monetag';
+import { showActionAd } from '../adNetwork';
 
 const COOLDOWN_SECONDS = 60;
 
@@ -21,6 +22,9 @@ export default function Friends({ telegramId, onBalanceChange }) {
   const [claiming, setClaiming] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [copied, setCopied] = useState(false);
+  // Only needed for showActionAd's network switch (action_ads_network /
+  // adsgram_block_id) — nothing else here reads it.
+  const [adConfig, setAdConfig] = useState(null);
   const timerRef = useRef(null);
 
   const botUsername = import.meta.env?.VITE_BOT_USERNAME;
@@ -49,6 +53,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
   useEffect(() => {
     refreshStatus();
     api.referralInvited().then((r) => setInvited(r.invited)).catch(() => setInvited([]));
+    api.getConfig().then(setAdConfig).catch(() => {});
   }, [refreshStatus]);
 
   useEffect(() => {
@@ -67,7 +72,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
     setClaiming(true);
     try {
       const { nonce } = await api.prepareClaim();
-      if (nonce) await showRewardedAd(nonce);
+      await showActionAd(nonce, adConfig);
       const claimResult = await withConfirmationRetry(() => api.claimReferral(nonce));
       setStatus((prev) => ({ ...prev, ...claimResult }));
       onBalanceChange(claimResult.main_balance);
