@@ -80,6 +80,13 @@ const SETTING_DEFS = {
   watch_ad_daily_limit_monetag: { type: 'number', default: 3, min: 0 },
   watch_ad_daily_limit_adsgram: { type: 'number', default: 3, min: 0 },
 
+  // Optional platform fee on withdrawals — 0 means off (the default;
+  // payout equals face value exactly like before this existed). When
+  // set above 0, the user is still charged the full points from their
+  // balance, but the USD/ADLX amount actually paid out is reduced by
+  // this percent — see withdrawalService.js's requestWithdrawal.
+  withdrawal_fee_percent: { type: 'number', default: 0, min: 0, max: 100 },
+
   // --- 7-day login streak (Leaderboard & Streak tab) ---
   // One ad-watch per day maintains it; each day's point value is its
   // own editable setting (same "one field per slot" pattern as

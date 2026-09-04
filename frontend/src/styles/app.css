@@ -1133,21 +1133,26 @@ h3 {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
 
 .friends-invited-avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--gold-light), var(--gold));
   color: #1a1300;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.18);
 }
 
 .friends-invited-name {
@@ -1411,7 +1416,25 @@ h3 {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(2, 8, 16, 0.4);
+  /* Stronger at the top (where the headings/subtitles sit directly on
+     the background with no card behind them) easing down toward where
+     the leaderboard rows/streak cards already have their own opaque
+     background providing contrast. */
+  background: linear-gradient(
+    180deg,
+    rgba(2, 8, 16, 0.68) 0%,
+    rgba(2, 8, 16, 0.5) 180px,
+    rgba(2, 8, 16, 0.38) 100%
+  );
   pointer-events: none;
   z-index: -1;
+}
+
+.leaderboard-subtitle {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--tp-on-background, #d4e4fa);
+  text-align: center;
+  margin-bottom: 10px;
+  line-height: 1.5;
 }

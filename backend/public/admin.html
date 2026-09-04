@@ -59,6 +59,13 @@
   <h2>Pending Withdrawals</h2>
   <div id="withdrawalsList" class="card">Loading…</div>
 
+  <h2>Completed Withdrawals</h2>
+  <div class="card">
+    <p class="muted">Fix a typo'd tx hash or date after completing a withdrawal — targets by ID, leave a field blank to keep it unchanged.</p>
+    <div id="completedWithdrawalsList">Loading…</div>
+    <button class="secondary" onclick="loadCompletedWithdrawals()" style="margin-top:8px">Refresh</button>
+  </div>
+
   <h2>Adjust a User's Balance</h2>
   <div class="card">
     <label>Telegram ID</label>
@@ -242,6 +249,52 @@
     } catch (e) { alert(e.message); }
   }
 
+  async function loadCompletedWithdrawals() {
+    const el = document.getElementById('completedWithdrawalsList');
+    el.textContent = 'Loading…';
+    try {
+      const { withdrawals } = await adminFetch('/admin/withdrawals/completed');
+      if (withdrawals.length === 0) {
+        el.innerHTML = '<p class="muted">No completed withdrawals yet.</p>';
+        return;
+      }
+      el.innerHTML = withdrawals.map((w) => {
+        // 'YYYY-MM-DD HH:MM:SS' -> 'YYYY-MM-DDTHH:MM' for the
+        // datetime-local input's value attribute.
+        const dtLocal = (w.processed_at || '').replace(' ', 'T').slice(0, 16);
+        return `
+        <div class="withdrawal-item" id="cw-${w.id}">
+          <div><strong>${w.points_deducted} pts</strong> ($${w.amount_usd.toFixed(2)}) — user ${w.telegram_id}</div>
+          <div class="withdrawal-meta">ID: ${w.id}</div>
+          <div class="row" style="margin-top:8px">
+            <input id="cwhash-${w.id}" type="text" value="${w.tx_hash || ''}" placeholder="Transaction hash" />
+          </div>
+          <div class="row">
+            <input id="cwdate-${w.id}" type="datetime-local" value="${dtLocal}" />
+          </div>
+          <div class="row">
+            <button onclick="saveWithdrawalEdit('${w.id}')">Save Changes</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
+  async function saveWithdrawalEdit(id) {
+    const hash = document.getElementById('cwhash-' + id).value.trim();
+    const dtLocal = document.getElementById('cwdate-' + id).value; // 'YYYY-MM-DDTHH:MM' or ''
+    const processed_at = dtLocal ? dtLocal.replace('T', ' ') + ':00' : '';
+    try {
+      await adminFetch('/admin/withdrawal/edit', {
+        method: 'POST',
+        body: JSON.stringify({ withdrawal_id: id, tx_hash: hash, processed_at }),
+      });
+      await loadCompletedWithdrawals();
+    } catch (e) { alert(e.message); }
+  }
+
   async function adjustBalance() {
     const statusEl = document.getElementById('adjStatus');
     statusEl.textContent = '';
@@ -326,6 +379,7 @@
     adsgram_task_reward_points: 'Adsgram watch-ad task: fixed point reward',
     watch_ad_daily_limit_monetag: 'Monetag watch-ad task: daily limit',
     watch_ad_daily_limit_adsgram: 'Adsgram watch-ad task: daily limit',
+    withdrawal_fee_percent: 'Withdrawal fee % (0 = off, payout at face value)',
     streak_day1_points: 'Streak: Day 1 points',
     streak_day2_points: 'Streak: Day 2 points',
     streak_day3_points: 'Streak: Day 3 points',
@@ -542,6 +596,7 @@
     document.getElementById('keyGate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
+    loadCompletedWithdrawals();
     loadSettings();
     loadFlags();
     loadBotContent();

@@ -53,8 +53,14 @@ async function requestWithdrawal({ telegramId, address, points }) {
     });
 
     const id = uuidv4();
-    const pointsPerUsd = await getSetting('points_per_usd');
-    const amountUsd = points / pointsPerUsd;
+    const [pointsPerUsd, feePercent] = await Promise.all([
+      getSetting('points_per_usd'),
+      getSetting('withdrawal_fee_percent'),
+    ]);
+    // User is charged the FULL points regardless of fee — the fee only
+    // reduces what's actually paid out, same as any platform-fee model.
+    // At the default 0%, this is identical to the pre-fee behavior.
+    const amountUsd = (points / pointsPerUsd) * (1 - feePercent / 100);
     await tx.execute({
       sql: `INSERT INTO withdrawals (id, telegram_id, usdt_bep20_address, amount_usd, points_deducted, status)
             VALUES (?, ?, ?, ?, ?, 'PENDING')`,
@@ -157,6 +163,66 @@ async function completeWithdrawal({ withdrawalId, txHash }) {
   }
 }
 
+// For fixing a typo made when originally completing a withdrawal (wrong
+// tx_hash or date entered) — NOT for changing anything else. Only
+// touches an ALREADY-COMPLETED withdrawal; doesn't re-run the balance
+// deduction or ledger entry (those already happened in completeWithdrawal
+// above), just corrects the two fields. Either field can be omitted to
+// leave it as-is.
+async function editCompletedWithdrawal({ withdrawalId, txHash, processedAt }) {
+  const wRes = await client.execute({
+    sql: 'SELECT * FROM withdrawals WHERE id = ?',
+    args: [withdrawalId],
+  });
+  const w = wRes.rows[0];
+  if (!w) {
+    const err = new Error('Withdrawal not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (w.status !== 'COMPLETED') {
+    const err = new Error(`Can only edit an already-completed withdrawal's hash/date — this one is ${w.status}`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const sets = [];
+  const args = [];
+  if (txHash !== undefined) {
+    if (!txHash || typeof txHash !== 'string' || txHash.length < 10) {
+      const err = new Error('tx_hash must be a real transaction hash, at least 10 characters');
+      err.statusCode = 400;
+      throw err;
+    }
+    sets.push('tx_hash = ?');
+    args.push(txHash);
+  }
+  if (processedAt !== undefined) {
+    // Expects 'YYYY-MM-DD HH:MM:SS' (what the admin panel's
+    // datetime-local input is converted to before this call) — same
+    // format SQLite's own CURRENT_TIMESTAMP produces, so this stays
+    // consistent with every other row's processed_at.
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(processedAt)) {
+      const err = new Error("processedAt must look like 'YYYY-MM-DD HH:MM:SS'");
+      err.statusCode = 400;
+      throw err;
+    }
+    sets.push('processed_at = ?');
+    args.push(processedAt);
+  }
+  if (sets.length === 0) {
+    const err = new Error('Nothing to update — provide txHash and/or processedAt');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  args.push(withdrawalId);
+  await client.execute({ sql: `UPDATE withdrawals SET ${sets.join(', ')} WHERE id = ?`, args });
+
+  const res = await client.execute({ sql: 'SELECT * FROM withdrawals WHERE id = ?', args: [withdrawalId] });
+  return res.rows[0];
+}
+
 async function rejectWithdrawal({ withdrawalId, reason }) {
   const tx = await client.transaction('write');
   try {
@@ -241,6 +307,7 @@ module.exports = {
   listPendingWithdrawals,
   listWithdrawalsForUser,
   completeWithdrawal,
+  editCompletedWithdrawal,
   rejectWithdrawal,
   getRecentPayouts,
   TON_ADDRESS_REGEX,

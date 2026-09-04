@@ -95,6 +95,7 @@ export default function Wallet({
   }
 
   const pointsPerUsd = config?.points_per_usd || 10000;
+  const feePercent = config?.withdrawal_fee_percent || 0;
   const withdrawalsDisabled = config?.withdrawals && config.withdrawals.enabled === false;
   const pointsNum = Number(points);
   const addressValid = TON_ADDRESS_REGEX.test(address);
@@ -288,6 +289,12 @@ export default function Wallet({
             {points && !amountValid && (
               <span className="field-error">
                 Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
+              </span>
+            )}
+            {amountValid && (
+              <span className="wallet-empty" style={{ margin: '4px 0 0' }}>
+                You'll receive ≈ ${((pointsNum / pointsPerUsd) * (1 - feePercent / 100)).toFixed(2)}
+                {feePercent > 0 && ` (${feePercent}% fee applied)`}
               </span>
             )}
           </label>

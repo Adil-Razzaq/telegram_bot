@@ -51,7 +51,7 @@ export default function Leaderboard() {
     <div className="tasks-page leaderboard-page">
       <h2 className="page-title">Streak</h2>
       {streak.broke_streak && (
-        <p className="task-reward" style={{ color: 'var(--danger)', textAlign: 'center', marginBottom: 8 }}>
+        <p className="leaderboard-subtitle" style={{ color: 'var(--danger)' }}>
           You missed a day — streak reset to Day 1.
         </p>
       )}
@@ -97,7 +97,7 @@ export default function Leaderboard() {
       <h2 className="page-title" style={{ marginTop: 24 }}>
         Leaderboard
       </h2>
-      <p className="task-reward" style={{ textAlign: 'center', marginBottom: 8 }}>
+      <p className="leaderboard-subtitle">
         Ranked by total referrals — most referrals at the top.
       </p>
 

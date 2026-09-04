@@ -9,6 +9,7 @@ const { getAllBotContent, setBotContent, DEFAULTS: BOT_CONTENT_DEFAULTS } = requ
 const {
   listPendingWithdrawals,
   completeWithdrawal,
+  editCompletedWithdrawal,
   rejectWithdrawal,
 } = require('../services/withdrawalService');
 const { getRecentActivity } = require('../services/streamService');
@@ -101,6 +102,35 @@ router.post('/withdrawal/complete', async (req, res) => {
   const { withdrawal_id, tx_hash } = req.body;
   try {
     const withdrawal = await completeWithdrawal({ withdrawalId: withdrawal_id, txHash: tx_hash });
+    res.json({ ok: true, withdrawal });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// For fixing a typo made when completing a withdrawal (wrong tx_hash or
+// date) — targets an already-COMPLETED withdrawal by id. Either field
+// can be omitted to leave it as-is. See editCompletedWithdrawal in
+// withdrawalService.js for exactly what this does and doesn't touch.
+router.get('/withdrawals/completed', async (req, res) => {
+  try {
+    const res_ = await client.execute(
+      `SELECT * FROM withdrawals WHERE status = 'COMPLETED' ORDER BY processed_at DESC LIMIT 50`
+    );
+    res.json({ ok: true, withdrawals: res_.rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/withdrawal/edit', async (req, res) => {
+  const { withdrawal_id, tx_hash, processed_at } = req.body;
+  try {
+    const withdrawal = await editCompletedWithdrawal({
+      withdrawalId: withdrawal_id,
+      txHash: tx_hash || undefined,
+      processedAt: processed_at || undefined,
+    });
     res.json({ ok: true, withdrawal });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
