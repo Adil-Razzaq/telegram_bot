@@ -8,19 +8,18 @@ const { getAllSettings } = require('../utils/settings');
  *   - Nothing accrues until the user taps Start (watches an ad first).
  *   - Once started, points accrue continuously in real time toward that
  *     cycle's target (see pointsForCycleIndex) over `miner_cycle_hours`.
- *   - Claim is available AT ANY TIME while running — not just once the
- *     cycle finishes — and pays out whatever's accrued so far
- *     (prorated by elapsed time, capped at the full cycle amount if
- *     claimed after it's actually finished). Claiming also requires
- *     watching an ad, and ends that cycle (status -> idle) whether it
- *     was claimed early or after completion — the user then has to tap
- *     Start (+ ad) again for the next cycle.
- *   - Once the cycle's timer reaches zero, accrual is capped (always
- *     was) AND getStatus reports cycle_complete: true so the frontend
- *     can stop showing it as "running" and clearly prompt to Claim
- *     instead of leaving it looking like mining is still in progress.
- *     Nothing forces an auto-claim — that still costs an ad, same as
- *     any other claim — this is a display-state fix, not a payout one.
+ *   - Claim only unlocks once the cycle's FULL duration has actually
+ *     elapsed (cycle_complete) — no more claiming early for a prorated
+ *     amount. That earlier design let a claim end the cycle before it
+ *     was really done, which read as "claiming breaks the cycle" from
+ *     the user's side — see isCycleComplete, checked in both
+ *     prepareClaim and claim itself. Claiming still requires watching
+ *     an ad, and always ends that cycle (status -> idle) — the user
+ *     then has to tap Start (+ ad) again for the next one.
+ *   - getStatus reports cycle_complete: true once the timer hits zero,
+ *     so the frontend can stop showing it as "running" and show a
+ *     separate, distinct Claim button instead of leaving it looking
+ *     like mining is still in progress.
  *   - Ad-gated Boost: once per cycle, watching an extra ad MULTIPLIES
  *     that cycle's point target by miner_boost_multiplier (default 3x)
  *     — e.g. a cycle normally worth 25 becomes 75 once boosted: 25
@@ -179,12 +178,27 @@ async function startCycle({ telegramId, nonce }) {
   return getStatus({ telegramId });
 }
 
+function isCycleComplete(row) {
+  const endsAt = new Date(row.cycle_ends_at + 'Z').getTime();
+  return Date.now() >= endsAt;
+}
+
 // Step 1 of claiming: get an ad nonce. Mirrors prepareStart exactly —
 // claim now costs an ad view too, same as starting does.
 async function prepareClaim({ telegramId }) {
   const row = await getRow(telegramId);
   if (row.status !== 'running') {
     const err = new Error('Miner is not running — tap Start first');
+    err.statusCode = 400;
+    throw err;
+  }
+  // Claiming now requires the FULL cycle to have elapsed — no more
+  // claiming early for a prorated amount. That earlier design let a
+  // claim end the cycle before it was actually done, which read as
+  // "claiming breaks the cycle" — this closes that off entirely rather
+  // than trying to patch around it.
+  if (!isCycleComplete(row)) {
+    const err = new Error('This cycle is still running — claim unlocks once the timer hits zero');
     err.statusCode = 400;
     throw err;
   }
@@ -209,6 +223,15 @@ async function claim({ telegramId, nonce }) {
 
     if (row.status !== 'running') {
       const err = new Error('Miner is not running — tap Start first');
+      err.statusCode = 400;
+      throw err;
+    }
+    // Re-checked here, not just in prepareClaim — prepareClaim's check
+    // happens before the ad plays, so by the time this runs the truth
+    // could theoretically have changed (e.g. claimed via another
+    // request in between). This is the check that actually matters.
+    if (!isCycleComplete(row)) {
+      const err = new Error('This cycle is still running — claim unlocks once the timer hits zero');
       err.statusCode = 400;
       throw err;
     }

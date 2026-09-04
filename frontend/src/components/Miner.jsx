@@ -325,7 +325,7 @@ export default function Miner({
             })()}
           </div>
           <p className="miner-copy">
-            left in this cycle — claim anytime for what's accrued so far, or wait for it to finish.
+            left in this cycle — the Claim button unlocks once this hits zero.
           </p>
         </>
       )}
@@ -351,7 +351,12 @@ export default function Miner({
           {boosting ? 'Loading…' : `⚡ Watch ad for ${status.boost_multiplier}x rewards`}
         </button>
       )}
-      {isRunning && (
+      {/* Separate from Boost above, and only ever shown once the cycle
+          has genuinely finished — claiming early is no longer possible
+          (backend enforces this too, see isCycleComplete in
+          minerService.js), so there's no button here at all while
+          activelyRunning. */}
+      {cycleComplete && (
         <button className="miner-claim-button" onClick={handleClaim} disabled={claiming}>
           {claiming ? 'Claiming…' : 'Watch ad & Claim'}
         </button>

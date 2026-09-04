@@ -13,6 +13,20 @@ function isMaterialSymbolName(icon) {
   return /^[a-z0-9_]+$/.test(icon || '');
 }
 
+function msUntilNextUtcMidnight() {
+  const now = new Date();
+  const nextMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return nextMidnight - now.getTime();
+}
+
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSeconds % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
 export default function Tasks({ onBalanceChange }) {
   const [tasks, setTasks] = useState(null);
   const [visited, setVisited] = useState({});
@@ -28,6 +42,16 @@ export default function Tasks({ onBalanceChange }) {
   const [config, setConfig] = useState(null);
   const [adWatchStatus, setAdWatchStatus] = useState(null);
   const [watchingNetwork, setWatchingNetwork] = useState(null);
+  // Purely cosmetic — counts down to the next UTC daily reset (when
+  // watch limits refill), same "18:26:37" touch as the reference
+  // design. Limits themselves reset server-side by calendar day
+  // regardless of whether this timer is ever looked at.
+  const [resetIn, setResetIn] = useState(msUntilNextUtcMidnight());
+
+  useEffect(() => {
+    const t = setInterval(() => setResetIn(msUntilNextUtcMidnight()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   async function refreshAdWatch() {
     try {
@@ -135,56 +159,60 @@ export default function Tasks({ onBalanceChange }) {
       {tasks.length === 0 && <p className="tasks-empty">No tasks available right now.</p>}
 
       {config?.action_ads_enabled !== false && adWatchStatus && (
-        <div className="tasks-list">
-          <div className="task-card">
-            <span className="task-icon">
-              <span className="material-symbols-outlined">smart_display</span>
+        <div className="watch-earn-section">
+          <div className="watch-earn-header">
+            <span className="watch-earn-title">
+              <span className="watch-earn-dot" /> WATCH &amp; EARN
             </span>
-            <div className="task-info">
-              <span className="task-title">Watch a Monetag Ad</span>
-              <span className="task-reward">
-                Bonus reward · {adWatchStatus.monetag.watched_today}/
-                {adWatchStatus.monetag.daily_limit} today
-              </span>
-            </div>
-            <button
-              className="task-button task-button-claim"
-              onClick={() => handleWatchDailyAd('monetag')}
-              disabled={watchingNetwork === 'monetag' || !adWatchStatus.monetag.can_watch}
-            >
-              {watchingNetwork === 'monetag'
-                ? '…'
-                : adWatchStatus.monetag.can_watch
-                ? 'Watch ad'
-                : 'Come back tomorrow'}
-            </button>
+            <span className="watch-earn-countdown">
+              <span className="material-symbols-outlined">schedule</span>
+              {formatCountdown(resetIn)}
+            </span>
           </div>
 
-          {config.adsgram_block_id && (
+          <div className="tasks-list">
+            {config.adsgram_block_id && (
+              <div className="task-card">
+                <span className="task-icon watch-earn-icon-adsgram">
+                  <span className="material-symbols-outlined">smart_display</span>
+                </span>
+                <div className="task-info">
+                  <span className="task-title">Adsgram</span>
+                  <span className="task-reward">
+                    {adWatchStatus.adsgram.watched_today}/{adWatchStatus.adsgram.daily_limit}
+                    <span className="watch-earn-reward-pill">+{adWatchStatus.adsgram.reward_points}</span>
+                  </span>
+                </div>
+                <button
+                  className="task-button task-button-claim watch-earn-button"
+                  onClick={() => handleWatchDailyAd('adsgram')}
+                  disabled={watchingNetwork === 'adsgram' || !adWatchStatus.adsgram.can_watch}
+                >
+                  {watchingNetwork === 'adsgram' ? '…' : adWatchStatus.adsgram.can_watch ? 'WATCH' : 'DONE'}
+                </button>
+              </div>
+            )}
+
             <div className="task-card">
-              <span className="task-icon">
+              <span className="task-icon watch-earn-icon-monetag">
                 <span className="material-symbols-outlined">smart_display</span>
               </span>
               <div className="task-info">
-                <span className="task-title">Watch an Adsgram Ad</span>
+                <span className="task-title">Monetag</span>
                 <span className="task-reward">
-                  +{adWatchStatus.adsgram.reward_points} ADLX · {adWatchStatus.adsgram.watched_today}/
-                  {adWatchStatus.adsgram.daily_limit} today
+                  {adWatchStatus.monetag.watched_today}/{adWatchStatus.monetag.daily_limit}
+                  <span className="watch-earn-reward-pill">Bonus</span>
                 </span>
               </div>
               <button
-                className="task-button task-button-claim"
-                onClick={() => handleWatchDailyAd('adsgram')}
-                disabled={watchingNetwork === 'adsgram' || !adWatchStatus.adsgram.can_watch}
+                className="task-button task-button-claim watch-earn-button"
+                onClick={() => handleWatchDailyAd('monetag')}
+                disabled={watchingNetwork === 'monetag' || !adWatchStatus.monetag.can_watch}
               >
-                {watchingNetwork === 'adsgram'
-                  ? '…'
-                  : adWatchStatus.adsgram.can_watch
-                  ? 'Watch ad'
-                  : 'Come back tomorrow'}
+                {watchingNetwork === 'monetag' ? '…' : adWatchStatus.monetag.can_watch ? 'WATCH' : 'DONE'}
               </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 

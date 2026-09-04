@@ -48,7 +48,7 @@ export default function Leaderboard() {
   }
 
   return (
-    <div className="tasks-page">
+    <div className="tasks-page leaderboard-page">
       <h2 className="page-title">Streak</h2>
       {streak.broke_streak && (
         <p className="task-reward" style={{ color: 'var(--danger)', textAlign: 'center', marginBottom: 8 }}>
