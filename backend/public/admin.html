@@ -152,6 +152,13 @@
     <button class="secondary" onclick="loadCoinStats()" style="margin-top:8px">Refresh</button>
   </div>
 
+  <h2>Live Activity Stream</h2>
+  <div class="card">
+    <p class="muted">Recent earning events across all users — admin monitoring only, not shown in the app.</p>
+    <div id="streamSummary">Loading…</div>
+    <button class="secondary" onclick="loadStream()" style="margin-top:8px">Refresh</button>
+  </div>
+
   <h2>Ad Revenue</h2>
   <div class="card">
     <p class="muted">Real numbers from Monetag's own postbacks — independent of app reward logic.</p>
@@ -491,6 +498,25 @@
     }
   }
 
+  async function loadStream() {
+    const el = document.getElementById('streamSummary');
+    el.textContent = 'Loading…';
+    try {
+      const { activity } = await adminFetch('/admin/stream');
+      if (activity.length === 0) {
+        el.innerHTML = '<p class="muted">No activity yet.</p>';
+        return;
+      }
+      el.innerHTML = activity
+        .map(
+          (a) => `
+        <div style="padding:6px 0; border-bottom:1px solid #222">
+          <strong>${a.display_name}</strong> ${a.action} — <span style="color:#00e38b">+${a.points}</span>
+          <span class="muted" style="float:right">${new Date(a.created_at + 'Z').toLocaleString()}</span>
+        </div>`
+        )
+        .join('');
+
   async function loadAdRevenue() {
     const el = document.getElementById('adRevenueSummary');
     el.textContent = 'Loading…';
@@ -516,6 +542,7 @@
     loadFlags();
     loadBotContent();
     loadCoinStats();
+    loadStream();
     loadAdRevenue();
   }
 

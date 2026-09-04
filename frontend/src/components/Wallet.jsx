@@ -205,7 +205,7 @@ export default function Wallet({
           {payouts.map((p) => (
             <li key={p.tx_hash} className="wallet-history-item status-completed">
               <div>
-                <strong>{p.display_name}</strong> — ${p.amount_usd.toFixed(2)} ({p.points} ADLX)
+                <strong>{p.id}</strong> — <span style={{ color: 'var(--accent)' }}>+{p.points} ADLX</span>
                 <span className="status-badge status-completed">PAID</span>
               </div>
               <div className="wallet-history-meta">

@@ -62,5 +62,4 @@ export const api = {
   prepareStreakClaim: () => apiCall('/streak/prepare-claim', { method: 'POST' }),
   claimStreak: (nonce) => apiCall('/streak/claim', { method: 'POST', body: { nonce } }),
   leaderboardTop: () => apiCall('/leaderboard/top'),
-  streamRecent: () => apiCall('/stream/recent'),
 };

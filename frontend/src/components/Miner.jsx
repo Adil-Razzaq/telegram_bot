@@ -8,7 +8,28 @@ function formatDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = Math.floor(totalSeconds % 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return { h: String(h).padStart(2, '0'), m: String(m).padStart(2, '0'), s: String(s).padStart(2, '0') };
+}
+
+// The single source of truth for the ticking display: a stable anchor
+// (cycle_started_at, which only changes on a fresh Start) plus a rate —
+// never re-derived from a periodically-floored snapshot (accrued_now),
+// which is what caused the "counts up then snaps back to a whole
+// number" glitch this replaces. Both Start and Boost responses, and
+// every 15s poll, all funnel through this one function so the number
+// only ever climbs, never resets.
+function computeSyncFromStatus(s) {
+  if (!s || s.status !== 'running') return { startedAt: 0, rate: 0, cap: 0 };
+  return {
+    startedAt: new Date(s.cycle_started_at + 'Z').getTime(),
+    rate: s.rate_per_second,
+    cap: s.current_cycle_points,
+  };
+}
+function readSync(sync) {
+  if (!sync.rate) return 0;
+  const elapsed = (Date.now() - sync.startedAt) / 1000;
+  return Math.min(sync.cap, sync.rate * elapsed);
 }
 
 function shortAddress(addr) {
@@ -62,16 +83,10 @@ export default function Miner({
     const elapsedSinceCache = (Date.now() - cached.cachedAt) / 1000;
     return Math.max(0, cached.status.seconds_remaining_in_cycle - elapsedSinceCache);
   });
-  // Live-ticking accrued amount — synced from the server on each poll,
-  // then animated locally between polls using rate_per_second so it
-  // reads as continuously moving (matching the mockup's pulsing
-  // "+70.0379") without hitting the server every frame.
-  const [liveAccrued, setLiveAccrued] = useState(() => {
-    if (!cached?.status) return 0;
-    const elapsedSinceCache = (Date.now() - cached.cachedAt) / 1000;
-    const projected = cached.status.accrued_now + cached.status.rate_per_second * elapsedSinceCache;
-    return Math.min(cached.status.current_cycle_points || Infinity, projected);
-  });
+  // Live-ticking accrued amount — derived continuously from
+  // computeSyncFromStatus/readSync (see those for why), not directly
+  // from the cached snapshot's accrued_now.
+  const [liveAccrued, setLiveAccrued] = useState(() => readSync(computeSyncFromStatus(cached?.status)));
   const [starting, setStarting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [boosting, setBoosting] = useState(false);
@@ -81,19 +96,23 @@ export default function Miner({
   const tickRef = useRef(null);
   const pollRef = useRef(null);
   const toastTimerRef = useRef(null);
-  const syncRef = useRef(
-    cached?.status
-      ? { accrued: cached.status.accrued_now, rate: cached.status.rate_per_second, syncedAt: cached.cachedAt }
-      : { accrued: 0, rate: 0, syncedAt: 0 }
-  );
+  // Deliberately NOT keyed off accrued_now (a floored integer, re-sent
+  // every 15s poll) — animating from that caused the exact glitch being
+  // fixed here: the decimal climbs smoothly for 15s then snaps back to
+  // a whole number the instant a poll lands. Instead this derives the
+  // displayed value purely from elapsed time × rate, anchored to
+  // cycle_started_at, which never changes between polls (only a fresh
+  // Start/Boost legitimately changes it) — so there's nothing to snap
+  // back to, the number only ever climbs.
+  const syncRef = useRef(computeSyncFromStatus(cached?.status));
 
   async function refreshStatus() {
     try {
       const s = await api.minerStatus();
       setStatus(s);
       setSecondsLeft(s.seconds_remaining_in_cycle);
-      setLiveAccrued(s.accrued_now);
-      syncRef.current = { accrued: s.accrued_now, rate: s.rate_per_second, syncedAt: Date.now() };
+      syncRef.current = computeSyncFromStatus(s);
+      setLiveAccrued(readSync(syncRef.current));
       writeCachedStatus({ status: s, cachedAt: Date.now() });
       setError(null);
     } catch (e) {
@@ -111,18 +130,10 @@ export default function Miner({
   useEffect(() => {
     tickRef.current = setInterval(() => {
       setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
-      const { accrued, rate, syncedAt } = syncRef.current;
-      if (rate > 0) {
-        const elapsedSinceSync = (Date.now() - syncedAt) / 1000;
-        // Capped at the cycle's full point target — otherwise once the
-        // timer hits zero this local animation just keeps climbing past
-        // the true value until the next 15s poll corrects it.
-        const cap = status?.current_cycle_points ?? Infinity;
-        setLiveAccrued(Math.min(cap, accrued + rate * elapsedSinceSync));
-      }
+      setLiveAccrued(readSync(syncRef.current));
     }, 150); // smooth-ish ticking without being wasteful
     return () => clearInterval(tickRef.current);
-  }, [status?.current_cycle_points]);
+  }, []);
 
   function showToast(points) {
     setToast(points);
@@ -141,8 +152,8 @@ export default function Miner({
       const result = await withConfirmationRetry(() => api.startMiner(nonce));
       setStatus(result);
       setSecondsLeft(result.seconds_remaining_in_cycle);
-      setLiveAccrued(result.accrued_now);
-      syncRef.current = { accrued: result.accrued_now, rate: result.rate_per_second, syncedAt: Date.now() };
+      syncRef.current = computeSyncFromStatus(result);
+      setLiveAccrued(readSync(syncRef.current));
       writeCachedStatus({ status: result, cachedAt: Date.now() });
     } catch (e) {
       setError(e.message);
@@ -188,8 +199,8 @@ export default function Miner({
       const result = await withConfirmationRetry(() => api.activateMinerBoost(nonce));
       setStatus(result);
       setSecondsLeft(result.seconds_remaining_in_cycle);
-      setLiveAccrued(result.accrued_now);
-      syncRef.current = { accrued: result.accrued_now, rate: result.rate_per_second, syncedAt: Date.now() };
+      syncRef.current = computeSyncFromStatus(result);
+      setLiveAccrued(readSync(syncRef.current));
       writeCachedStatus({ status: result, cachedAt: Date.now() });
       playNotificationSound();
     } catch (e) {
@@ -289,10 +300,34 @@ export default function Miner({
       </div>
 
       {activelyRunning && (
-        <p className="miner-copy">
-          {formatDuration(secondsLeft)} left in this cycle — claim anytime for what's accrued so far,
-          or wait for it to finish.
-        </p>
+        <>
+          <div className="miner-countdown">
+            {(() => {
+              const { h, m, s } = formatDuration(secondsLeft);
+              return (
+                <>
+                  <span className="miner-countdown-seg">
+                    <span className="miner-countdown-num">{h}</span>
+                    <span className="miner-countdown-label">HRS</span>
+                  </span>
+                  <span className="miner-countdown-colon">:</span>
+                  <span className="miner-countdown-seg">
+                    <span className="miner-countdown-num">{m}</span>
+                    <span className="miner-countdown-label">MIN</span>
+                  </span>
+                  <span className="miner-countdown-colon">:</span>
+                  <span className="miner-countdown-seg">
+                    <span className="miner-countdown-num">{s}</span>
+                    <span className="miner-countdown-label">SEC</span>
+                  </span>
+                </>
+              );
+            })()}
+          </div>
+          <p className="miner-copy">
+            left in this cycle — claim anytime for what's accrued so far, or wait for it to finish.
+          </p>
+        </>
       )}
       {cycleComplete && (
         <p className="miner-copy miner-copy-complete">

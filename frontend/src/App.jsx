@@ -4,7 +4,6 @@ import Tasks from './components/Tasks';
 import SpinWheel from './components/SpinWheel';
 import Friends from './components/Friends';
 import Wallet from './components/Wallet';
-import Stream from './components/Stream';
 import Leaderboard from './components/Leaderboard';
 import AutoAds from './components/AutoAds';
 import { api } from './api';
@@ -156,7 +155,6 @@ export default function App() {
         {tab === 'friends' && (
           <Friends telegramId={telegramId} onBalanceChange={setMainBalance} />
         )}
-        {tab === 'stream' && <Stream />}
         {tab === 'leaderboard' && <Leaderboard />}
         {tab === 'profile' && (
           <Wallet
@@ -188,10 +186,6 @@ export default function App() {
         <button className={tab === 'friends' ? 'active' : ''} onClick={() => setTab('friends')}>
           <span className="material-symbols-outlined">group</span>
           Friends
-        </button>
-        <button className={tab === 'stream' ? 'active' : ''} onClick={() => setTab('stream')}>
-          <span className="material-symbols-outlined">sensors</span>
-          Stream
         </button>
         <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>
           <span className="material-symbols-outlined">leaderboard</span>

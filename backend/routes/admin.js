@@ -11,6 +11,7 @@ const {
   completeWithdrawal,
   rejectWithdrawal,
 } = require('../services/withdrawalService');
+const { getRecentActivity } = require('../services/streamService');
 
 const router = express.Router();
 router.use(adminAuth);
@@ -361,6 +362,18 @@ router.post('/bot-content', async (req, res) => {
     res.json({ ok: true, content: await getAllBotContent({ forceRefresh: true }) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Live activity feed — moved here from a public app tab: not something
+// end users see, just an admin monitoring view of recent earning
+// events across all users. See services/streamService.js.
+router.get('/stream', async (req, res) => {
+  try {
+    const activity = await getRecentActivity({ limit: 50 });
+    res.json({ ok: true, activity });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
