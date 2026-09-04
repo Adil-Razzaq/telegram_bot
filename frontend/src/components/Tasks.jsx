@@ -216,6 +216,13 @@ export default function Tasks({ onBalanceChange }) {
         </div>
       )}
 
+      {tasks.length > 0 && (
+        <div className="watch-earn-header" style={{ marginBottom: 10 }}>
+          <span className="watch-earn-title">
+            <span className="watch-earn-dot" /> MORE WAYS TO EARN
+          </span>
+        </div>
+      )}
       <div className="tasks-list">
         {tasks.map((task) => (
           <div key={task.id} className="task-card">

@@ -516,6 +516,10 @@
         </div>`
         )
         .join('');
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
 
   async function loadAdRevenue() {
     const el = document.getElementById('adRevenueSummary');

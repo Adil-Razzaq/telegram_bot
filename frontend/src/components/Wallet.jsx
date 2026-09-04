@@ -32,11 +32,12 @@ export default function Wallet({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
-  // Public proof-of-payout board (see withdrawalService.js's
-  // getRecentPayouts) — always visible, not tucked behind a toggle like
-  // History above, since the whole point is for anyone (including an ad
-  // network's moderation reviewer) to see real payouts happened without
-  // extra clicks.
+  // Foldable like History below, but defaults to OPEN (History defaults
+  // closed) — this section exists specifically so proof of real payouts
+  // is visible with zero extra clicks (e.g. for an ad network's
+  // moderation review), so it stays expanded unless the user chooses to
+  // collapse it themselves.
+  const [showPayouts, setShowPayouts] = useState(true);
   const [payouts, setPayouts] = useState(null);
 
   async function loadPayouts() {
@@ -192,31 +193,42 @@ export default function Wallet({
         </span>
       </div>
 
-      <h3 style={{ textAlign: 'center' }}>Live Payouts</h3>
-      <p className="wallet-empty" style={{ marginTop: -8 }}>
-        Real withdrawals, verifiable on-chain — this is not a demo.
-      </p>
-      {payouts === null ? (
-        <p className="wallet-empty">Loading…</p>
-      ) : payouts.length === 0 ? (
-        <p className="wallet-empty">No completed payouts yet.</p>
-      ) : (
-        <ul className="wallet-history">
-          {payouts.map((p) => (
-            <li key={p.tx_hash} className="wallet-history-item status-completed">
-              <div>
-                <strong>{p.id}</strong> — <span style={{ color: 'var(--accent)' }}>+{p.points} ADLX</span>
-                <span className="status-badge status-completed">PAID</span>
-              </div>
-              <div className="wallet-history-meta">
-                {new Date(p.processed_at).toLocaleString()}
-                <a href={p.tonviewer_url} target="_blank" rel="noreferrer">
-                  View on Tonviewer
-                </a>
-              </div>
-            </li>
-          ))}
-        </ul>
+      <div className="glass-card">
+        <span className="glass-card-icon round">🏆</span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Live Payouts</p>
+          <p className="glass-card-subtitle">Real withdrawals, verifiable on-chain</p>
+        </div>
+        <button className="gold-button" onClick={() => setShowPayouts((v) => !v)}>
+          {showPayouts ? 'Close' : 'Open'}
+        </button>
+      </div>
+
+      {showPayouts && (
+        <>
+          {payouts === null ? (
+            <p className="wallet-empty">Loading…</p>
+          ) : payouts.length === 0 ? (
+            <p className="wallet-empty">No completed payouts yet.</p>
+          ) : (
+            <ul className="wallet-history">
+              {payouts.map((p) => (
+                <li key={p.tx_hash} className="wallet-history-item status-completed">
+                  <div>
+                    <strong>{p.id}</strong> — <span style={{ color: 'var(--accent)' }}>+{p.points} ADLX</span>
+                    <span className="status-badge status-completed">PAID</span>
+                  </div>
+                  <div className="wallet-history-meta">
+                    {new Date(p.processed_at).toLocaleString()}
+                    <a href={p.tonviewer_url} target="_blank" rel="noreferrer">
+                      View on Tonviewer
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <h3 style={{ textAlign: 'center' }}>Controls</h3>
