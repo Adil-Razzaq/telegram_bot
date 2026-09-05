@@ -80,11 +80,15 @@ const SETTING_DEFS = {
   watch_ad_daily_limit_monetag: { type: 'number', default: 3, min: 0 },
   watch_ad_daily_limit_adsgram: { type: 'number', default: 3, min: 0 },
 
-  // Optional platform fee on withdrawals — 0 means off (the default;
-  // payout equals face value exactly like before this existed). When
-  // set above 0, the user is still charged the full points from their
-  // balance, but the USD/ADLX amount actually paid out is reduced by
-  // this percent — see withdrawalService.js's requestWithdrawal.
+  // Optional platform fee on withdrawals — both 0 means off (the
+  // default; payout equals face value exactly like before this
+  // existed). Expressed in the SAME unit as what the user requested
+  // (points), added together: total fee = flat + percent-of-requested —
+  // shown to the user as a Requested/Fee/You Will Receive breakdown
+  // (see requestWithdrawal below), same shape as a typical "network
+  // fee" display. The user's balance is still debited the FULL
+  // requested points regardless — the fee only reduces the payout.
+  withdrawal_fee_flat_points: { type: 'number', default: 0, min: 0 },
   withdrawal_fee_percent: { type: 'number', default: 0, min: 0, max: 100 },
 
   // --- 7-day login streak (Leaderboard & Streak tab) ---

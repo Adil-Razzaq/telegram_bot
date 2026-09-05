@@ -59,11 +59,15 @@
   <h2>Pending Withdrawals</h2>
   <div id="withdrawalsList" class="card">Loading…</div>
 
-  <h2>Completed Withdrawals</h2>
+  <h2>Edit a Completed Withdrawal</h2>
   <div class="card">
-    <p class="muted">Fix a typo'd tx hash or date after completing a withdrawal — targets by ID, leave a field blank to keep it unchanged.</p>
-    <div id="completedWithdrawalsList">Loading…</div>
-    <button class="secondary" onclick="loadCompletedWithdrawals()" style="margin-top:8px">Refresh</button>
+    <p class="muted">Fix a typo'd date, points, or tx hash after completing a withdrawal. Enter the withdrawal's ID to fetch it.</p>
+    <label>Withdrawal ID</label>
+    <div class="row">
+      <input id="ewId" type="text" placeholder="Paste the withdrawal ID" />
+      <button onclick="fetchWithdrawalForEdit()">Fetch</button>
+    </div>
+    <div id="editWithdrawalForm"></div>
   </div>
 
   <h2>Adjust a User's Balance</h2>
@@ -249,50 +253,73 @@
     } catch (e) { alert(e.message); }
   }
 
-  async function loadCompletedWithdrawals() {
-    const el = document.getElementById('completedWithdrawalsList');
-    el.textContent = 'Loading…';
+  let currentEditWithdrawal = null; // the withdrawal currently loaded into the edit form, if any
+
+  async function fetchWithdrawalForEdit() {
+    const id = document.getElementById('ewId').value.trim();
+    const formEl = document.getElementById('editWithdrawalForm');
+    if (!id) { formEl.innerHTML = ''; return; }
+    formEl.innerHTML = '<p class="muted">Loading…</p>';
     try {
-      const { withdrawals } = await adminFetch('/admin/withdrawals/completed');
-      if (withdrawals.length === 0) {
-        el.innerHTML = '<p class="muted">No completed withdrawals yet.</p>';
+      const [{ withdrawal }, { settings }] = await Promise.all([
+        adminFetch('/admin/withdrawal/' + encodeURIComponent(id)),
+        adminFetch('/admin/settings'),
+      ]);
+      currentEditWithdrawal = withdrawal;
+
+      if (withdrawal.status !== 'COMPLETED') {
+        formEl.innerHTML = `<p class="status-msg err">This withdrawal is ${withdrawal.status}, not COMPLETED — only completed withdrawals can be edited here.</p>`;
         return;
       }
-      el.innerHTML = withdrawals.map((w) => {
-        // 'YYYY-MM-DD HH:MM:SS' -> 'YYYY-MM-DDTHH:MM' for the
-        // datetime-local input's value attribute.
-        const dtLocal = (w.processed_at || '').replace(' ', 'T').slice(0, 16);
-        return `
-        <div class="withdrawal-item" id="cw-${w.id}">
-          <div><strong>${w.points_deducted} pts</strong> ($${w.amount_usd.toFixed(2)}) — user ${w.telegram_id}</div>
-          <div class="withdrawal-meta">ID: ${w.id}</div>
-          <div class="row" style="margin-top:8px">
-            <input id="cwhash-${w.id}" type="text" value="${w.tx_hash || ''}" placeholder="Transaction hash" />
-          </div>
-          <div class="row">
-            <input id="cwdate-${w.id}" type="datetime-local" value="${dtLocal}" />
-          </div>
-          <div class="row">
-            <button onclick="saveWithdrawalEdit('${w.id}')">Save Changes</button>
-          </div>
-        </div>`;
-      }).join('');
+
+      const pointsPerUsd = settings.points_per_usd;
+      // 'YYYY-MM-DD HH:MM:SS' -> 'YYYY-MM-DDTHH:MM' for the
+      // datetime-local input's value attribute.
+      const dtLocal = (withdrawal.processed_at || '').replace(' ', 'T').slice(0, 16);
+
+      formEl.innerHTML = `
+        <p class="muted" style="margin-top:12px">User ${withdrawal.telegram_id} — currently <strong>${withdrawal.points_deducted} pts</strong> ($${withdrawal.amount_usd.toFixed(2)})</p>
+        <label>Points</label>
+        <input id="ewPoints" type="number" value="${withdrawal.points_deducted}" oninput="updateEwUsdPreview(${pointsPerUsd})" />
+        <p class="muted" id="ewUsdPreview">≈ $${withdrawal.amount_usd.toFixed(2)} at the current rate (auto-converted, not editable directly)</p>
+        <label>Transaction Hash</label>
+        <input id="ewHash" type="text" value="${withdrawal.tx_hash || ''}" />
+        <label>Date &amp; Time</label>
+        <input id="ewDate" type="datetime-local" value="${dtLocal}" />
+        <button onclick="saveWithdrawalEdit()" style="margin-top:8px">Save Changes</button>
+        <div id="ewStatus" class="status-msg"></div>
+      `;
     } catch (e) {
-      el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+      formEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
     }
   }
 
-  async function saveWithdrawalEdit(id) {
-    const hash = document.getElementById('cwhash-' + id).value.trim();
-    const dtLocal = document.getElementById('cwdate-' + id).value; // 'YYYY-MM-DDTHH:MM' or ''
+  function updateEwUsdPreview(pointsPerUsd) {
+    const points = Number(document.getElementById('ewPoints').value) || 0;
+    document.getElementById('ewUsdPreview').textContent =
+      `≈ $${(points / pointsPerUsd).toFixed(2)} at the current rate (auto-converted, not editable directly)`;
+  }
+
+  async function saveWithdrawalEdit() {
+    if (!currentEditWithdrawal) return;
+    const statusEl = document.getElementById('ewStatus');
+    statusEl.textContent = '';
+    const points = document.getElementById('ewPoints').value.trim();
+    const hash = document.getElementById('ewHash').value.trim();
+    const dtLocal = document.getElementById('ewDate').value; // 'YYYY-MM-DDTHH:MM' or ''
     const processed_at = dtLocal ? dtLocal.replace('T', ' ') + ':00' : '';
     try {
       await adminFetch('/admin/withdrawal/edit', {
         method: 'POST',
-        body: JSON.stringify({ withdrawal_id: id, tx_hash: hash, processed_at }),
+        body: JSON.stringify({ withdrawal_id: currentEditWithdrawal.id, tx_hash: hash, processed_at, points }),
       });
-      await loadCompletedWithdrawals();
-    } catch (e) { alert(e.message); }
+      statusEl.textContent = 'Saved.';
+      statusEl.className = 'status-msg ok';
+      await fetchWithdrawalForEdit();
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.className = 'status-msg err';
+    }
   }
 
   async function adjustBalance() {
@@ -379,7 +406,8 @@
     adsgram_task_reward_points: 'Adsgram watch-ad task: fixed point reward',
     watch_ad_daily_limit_monetag: 'Monetag watch-ad task: daily limit',
     watch_ad_daily_limit_adsgram: 'Adsgram watch-ad task: daily limit',
-    withdrawal_fee_percent: 'Withdrawal fee % (0 = off, payout at face value)',
+    withdrawal_fee_flat_points: 'Withdrawal fee: flat points (0 = off)',
+    withdrawal_fee_percent: 'Withdrawal fee: % of requested points (0 = off)',
     streak_day1_points: 'Streak: Day 1 points',
     streak_day2_points: 'Streak: Day 2 points',
     streak_day3_points: 'Streak: Day 3 points',
@@ -596,7 +624,6 @@
     document.getElementById('keyGate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
-    loadCompletedWithdrawals();
     loadSettings();
     loadFlags();
     loadBotContent();

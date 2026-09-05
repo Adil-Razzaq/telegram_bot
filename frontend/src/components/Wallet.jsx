@@ -95,6 +95,7 @@ export default function Wallet({
   }
 
   const pointsPerUsd = config?.points_per_usd || 10000;
+  const flatFee = config?.withdrawal_fee_flat_points || 0;
   const feePercent = config?.withdrawal_fee_percent || 0;
   const withdrawalsDisabled = config?.withdrawals && config.withdrawals.enabled === false;
   const pointsNum = Number(points);
@@ -102,6 +103,14 @@ export default function Wallet({
   const amountValid =
     Number.isInteger(pointsNum) && pointsNum >= MIN_WITHDRAWAL_POINTS && pointsNum <= mainBalance;
   const canSubmit = addressValid && amountValid && !submitting;
+
+  // Same shape as a typical "network fee" breakdown — fee expressed in
+  // the same unit (ADLX) as the request, not hidden inside a $
+  // conversion. At the defaults (0 flat, 0%) feePoints is always 0 and
+  // netPoints === pointsNum, so this changes nothing until a fee is set.
+  const feePoints = amountValid ? Math.round(flatFee + pointsNum * (feePercent / 100)) : 0;
+  const netPoints = amountValid ? Math.max(0, pointsNum - feePoints) : 0;
+  const hasFee = flatFee > 0 || feePercent > 0;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -291,13 +300,28 @@ export default function Wallet({
                 Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
               </span>
             )}
-            {amountValid && (
-              <span className="wallet-empty" style={{ margin: '4px 0 0' }}>
-                You'll receive ≈ ${((pointsNum / pointsPerUsd) * (1 - feePercent / 100)).toFixed(2)}
-                {feePercent > 0 && ` (${feePercent}% fee applied)`}
-              </span>
-            )}
           </label>
+
+          {amountValid && (
+            <div className="withdraw-breakdown">
+              <div className="withdraw-breakdown-row">
+                <span>Requested Amount</span>
+                <span>{pointsNum} ADLX</span>
+              </div>
+              {hasFee && (
+                <div className="withdraw-breakdown-row withdraw-breakdown-fee">
+                  <span>Withdrawal Fee</span>
+                  <span>-{feePoints} ADLX</span>
+                </div>
+              )}
+              <div className="withdraw-breakdown-row withdraw-breakdown-total">
+                <span>You Will Receive</span>
+                <span>
+                  {netPoints} ADLX <span className="withdraw-breakdown-usd">(≈ ${(netPoints / pointsPerUsd).toFixed(2)})</span>
+                </span>
+              </div>
+            </div>
+          )}
 
           <button type="submit" disabled={!canSubmit}>
             {submitting ? 'Submitting…' : 'Request withdrawal'}

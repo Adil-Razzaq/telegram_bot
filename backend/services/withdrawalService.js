@@ -53,14 +53,24 @@ async function requestWithdrawal({ telegramId, address, points }) {
     });
 
     const id = uuidv4();
-    const [pointsPerUsd, feePercent] = await Promise.all([
+    const [pointsPerUsd, flatFee, feePercent] = await Promise.all([
       getSetting('points_per_usd'),
+      getSetting('withdrawal_fee_flat_points'),
       getSetting('withdrawal_fee_percent'),
     ]);
-    // User is charged the FULL points regardless of fee — the fee only
-    // reduces what's actually paid out, same as any platform-fee model.
-    // At the default 0%, this is identical to the pre-fee behavior.
-    const amountUsd = (points / pointsPerUsd) * (1 - feePercent / 100);
+    // Fee expressed in the SAME unit the user requested (points), same
+    // shape as the "Requested Amount / Fee / You Will Receive" display
+    // in the withdrawal form — not a separate percentage silently
+    // applied only to the $ conversion. At the defaults (0 and 0%) this
+    // is identical to the pre-fee behavior: netPoints === points.
+    const feePoints = Math.round(flatFee + points * (feePercent / 100));
+    const netPoints = Math.max(0, points - feePoints);
+    if (netPoints <= 0) {
+      const err = new Error('The withdrawal fee is greater than or equal to the requested amount — try a larger amount');
+      err.statusCode = 400;
+      throw err;
+    }
+    const amountUsd = netPoints / pointsPerUsd;
     await tx.execute({
       sql: `INSERT INTO withdrawals (id, telegram_id, usdt_bep20_address, amount_usd, points_deducted, status)
             VALUES (?, ?, ?, ?, ?, 'PENDING')`,
@@ -68,7 +78,12 @@ async function requestWithdrawal({ telegramId, address, points }) {
     });
     await tx.execute({
       sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
-      args: [telegramId, 'withdrawal_request', -points, JSON.stringify({ withdrawalId: id })],
+      args: [
+        telegramId,
+        'withdrawal_request',
+        -points,
+        JSON.stringify({ withdrawalId: id, feePoints, netPoints }),
+      ],
     });
 
     const res = await tx.execute({ sql: 'SELECT * FROM withdrawals WHERE id = ?', args: [id] });
@@ -163,13 +178,23 @@ async function completeWithdrawal({ withdrawalId, txHash }) {
   }
 }
 
+// Single-withdrawal lookup by ID — powers the admin panel's "enter an ID,
+// fetch its details" flow instead of scrolling a full list.
+async function getWithdrawalById(withdrawalId) {
+  const res = await client.execute({
+    sql: 'SELECT * FROM withdrawals WHERE id = ?',
+    args: [withdrawalId],
+  });
+  return res.rows[0] || null;
+}
+
 // For fixing a typo made when originally completing a withdrawal (wrong
-// tx_hash or date entered) — NOT for changing anything else. Only
-// touches an ALREADY-COMPLETED withdrawal; doesn't re-run the balance
-// deduction or ledger entry (those already happened in completeWithdrawal
-// above), just corrects the two fields. Either field can be omitted to
-// leave it as-is.
-async function editCompletedWithdrawal({ withdrawalId, txHash, processedAt }) {
+// tx_hash, date, or points entered) — NOT for changing anything else.
+// Only touches an ALREADY-COMPLETED withdrawal; doesn't re-run the
+// balance deduction or ledger entry (those already happened in
+// completeWithdrawal above), just corrects these fields. Any field can
+// be omitted to leave it as-is.
+async function editCompletedWithdrawal({ withdrawalId, txHash, processedAt, points }) {
   const wRes = await client.execute({
     sql: 'SELECT * FROM withdrawals WHERE id = ?',
     args: [withdrawalId],
@@ -181,7 +206,7 @@ async function editCompletedWithdrawal({ withdrawalId, txHash, processedAt }) {
     throw err;
   }
   if (w.status !== 'COMPLETED') {
-    const err = new Error(`Can only edit an already-completed withdrawal's hash/date — this one is ${w.status}`);
+    const err = new Error(`Can only edit an already-completed withdrawal's details — this one is ${w.status}`);
     err.statusCode = 409;
     throw err;
   }
@@ -210,8 +235,23 @@ async function editCompletedWithdrawal({ withdrawalId, txHash, processedAt }) {
     sets.push('processed_at = ?');
     args.push(processedAt);
   }
+  if (points !== undefined) {
+    const pointsNum = Number(points);
+    if (!Number.isInteger(pointsNum) || pointsNum <= 0) {
+      const err = new Error('points must be a positive whole number');
+      err.statusCode = 400;
+      throw err;
+    }
+    // $ amount is always DERIVED from points at the CURRENT
+    // points_per_usd rate — never entered separately, so the two can
+    // never drift out of sync with each other or with how every other
+    // conversion in the app works.
+    const pointsPerUsd = await getSetting('points_per_usd');
+    sets.push('points_deducted = ?', 'amount_usd = ?');
+    args.push(pointsNum, pointsNum / pointsPerUsd);
+  }
   if (sets.length === 0) {
-    const err = new Error('Nothing to update — provide txHash and/or processedAt');
+    const err = new Error('Nothing to update — provide txHash, processedAt, and/or points');
     err.statusCode = 400;
     throw err;
   }
@@ -307,6 +347,7 @@ module.exports = {
   listPendingWithdrawals,
   listWithdrawalsForUser,
   completeWithdrawal,
+  getWithdrawalById,
   editCompletedWithdrawal,
   rejectWithdrawal,
   getRecentPayouts,
