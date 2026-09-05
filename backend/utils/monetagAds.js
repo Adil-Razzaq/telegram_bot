@@ -82,7 +82,7 @@ async function consumeAdEvent({ nonce, telegramId, action }) {
     throw err;
   }
   if (event.status !== 'confirmed') {
-    const err = new Error('Ad not yet confirmed by Monetag — wait a moment and try again');
+    const err = new Error('Ad not yet confirmed — wait a moment and try again');
     err.statusCode = 400;
     throw err;
   }

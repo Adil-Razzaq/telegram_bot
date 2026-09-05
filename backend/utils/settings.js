@@ -91,6 +91,21 @@ const SETTING_DEFS = {
   withdrawal_fee_flat_points: { type: 'number', default: 0, min: 0 },
   withdrawal_fee_percent: { type: 'number', default: 0, min: 0, max: 100 },
 
+  // Live Payouts board (Profile tab) display mode. Off (default) =
+  // current behavior: a single foldable list showing everything.
+  // On = only the 3 most recent show inline, plus two buttons: one to
+  // your public Telegram payout channel, one that opens an in-app
+  // scrollable popup with the full list. Either mode still satisfies
+  // "proof of payout is visible" for ad-network moderation — this is
+  // purely a display choice.
+  live_payouts_compact_mode: { type: 'boolean', default: false },
+  // Your public Telegram channel where payouts are also announced
+  // (separate from WITHDRAWAL_ANNOUNCE_CHANNEL in .env, which is the
+  // channel ID the BOT posts to — this is the public https://t.me/...
+  // link shown to users to open it). Only used when compact mode above
+  // is on.
+  payout_channel_url: { type: 'string', default: '' },
+
   // --- 7-day login streak (Leaderboard & Streak tab) ---
   // One ad-watch per day maintains it; each day's point value is its
   // own editable setting (same "one field per slot" pattern as

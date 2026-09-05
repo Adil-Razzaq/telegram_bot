@@ -9,6 +9,25 @@ function shortAddress(addr) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
+// Shared between the inline (3-latest or full) list and the "view all"
+// popup's list, so the two never drift out of sync in markup.
+function renderPayoutItem(p) {
+  return (
+    <li key={p.tx_hash} className="wallet-history-item status-completed">
+      <div>
+        <strong>{p.id}</strong> — <span style={{ color: 'var(--accent)' }}>+{p.points} ADLX</span>
+        <span className="status-badge status-completed">PAID</span>
+      </div>
+      <div className="wallet-history-meta">
+        {new Date(p.processed_at).toLocaleString()}
+        <a href={p.tonviewer_url} target="_blank" rel="noreferrer">
+          View on Tonviewer
+        </a>
+      </div>
+    </li>
+  );
+}
+
 export default function Wallet({
   telegramId,
   mainBalance,
@@ -36,9 +55,14 @@ export default function Wallet({
   // closed) — this section exists specifically so proof of real payouts
   // is visible with zero extra clicks (e.g. for an ad network's
   // moderation review), so it stays expanded unless the user chooses to
-  // collapse it themselves.
+  // collapse it themselves. Only used in the default (non-compact) mode
+  // — see config?.live_payouts_compact_mode below.
   const [showPayouts, setShowPayouts] = useState(true);
   const [payouts, setPayouts] = useState(null);
+  // Compact mode's "view all" popup — fetched fresh (higher limit) only
+  // when opened, not kept loaded all the time.
+  const [showAllPayoutsModal, setShowAllPayoutsModal] = useState(false);
+  const [allPayouts, setAllPayouts] = useState(null);
 
   async function loadPayouts() {
     try {
@@ -47,6 +71,27 @@ export default function Wallet({
     } catch (e) {
       // Non-fatal — rest of the wallet page still works if this fails.
     }
+  }
+
+  async function openAllPayoutsModal() {
+    setShowAllPayoutsModal(true);
+    if (allPayouts === null) {
+      try {
+        const res = await api.recentPayouts(100);
+        setAllPayouts(res.payouts);
+      } catch (e) {
+        setAllPayouts([]);
+      }
+    }
+  }
+
+  function openPayoutChannel() {
+    const url = config?.payout_channel_url;
+    if (!url) return;
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink && url.includes('t.me')) tg.openTelegramLink(url);
+    else if (tg?.openLink) tg.openLink(url);
+    else window.open(url, '_blank');
   }
 
   async function loadHistory() {
@@ -209,36 +254,69 @@ export default function Wallet({
           <p className="glass-card-title">Live Payouts</p>
           <p className="glass-card-subtitle">Real withdrawals, verifiable on-chain</p>
         </div>
-        <button className="gold-button" onClick={() => setShowPayouts((v) => !v)}>
-          {showPayouts ? 'Close' : 'Open'}
-        </button>
+        {!config?.live_payouts_compact_mode && (
+          <button className="gold-button" onClick={() => setShowPayouts((v) => !v)}>
+            {showPayouts ? 'Close' : 'Open'}
+          </button>
+        )}
       </div>
 
-      {showPayouts && (
+      {config?.live_payouts_compact_mode ? (
         <>
           {payouts === null ? (
             <p className="wallet-empty">Loading…</p>
           ) : payouts.length === 0 ? (
             <p className="wallet-empty">No completed payouts yet.</p>
           ) : (
-            <ul className="wallet-history">
-              {payouts.map((p) => (
-                <li key={p.tx_hash} className="wallet-history-item status-completed">
-                  <div>
-                    <strong>{p.id}</strong> — <span style={{ color: 'var(--accent)' }}>+{p.points} ADLX</span>
-                    <span className="status-badge status-completed">PAID</span>
-                  </div>
-                  <div className="wallet-history-meta">
-                    {new Date(p.processed_at).toLocaleString()}
-                    <a href={p.tonviewer_url} target="_blank" rel="noreferrer">
-                      View on Tonviewer
-                    </a>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <ul className="wallet-history">{payouts.slice(0, 3).map(renderPayoutItem)}</ul>
           )}
+          <div className="payout-buttons-row">
+            <button
+              className="secondary-button"
+              onClick={openPayoutChannel}
+              disabled={!config?.payout_channel_url}
+            >
+              📢 Payout Channel
+            </button>
+            <button className="secondary-button" onClick={openAllPayoutsModal}>
+              📜 View All Payouts
+            </button>
+          </div>
         </>
+      ) : (
+        showPayouts && (
+          <>
+            {payouts === null ? (
+              <p className="wallet-empty">Loading…</p>
+            ) : payouts.length === 0 ? (
+              <p className="wallet-empty">No completed payouts yet.</p>
+            ) : (
+              <ul className="wallet-history">{payouts.map(renderPayoutItem)}</ul>
+            )}
+          </>
+        )
+      )}
+
+      {showAllPayoutsModal && (
+        <div className="payout-modal-backdrop" onClick={() => setShowAllPayoutsModal(false)}>
+          <div className="payout-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="payout-modal-header">
+              <h3>All Payouts</h3>
+              <button className="payout-modal-close" onClick={() => setShowAllPayoutsModal(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="payout-modal-scroll">
+              {allPayouts === null ? (
+                <p className="wallet-empty">Loading…</p>
+              ) : allPayouts.length === 0 ? (
+                <p className="wallet-empty">No completed payouts yet.</p>
+              ) : (
+                <ul className="wallet-history">{allPayouts.map(renderPayoutItem)}</ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <h3 style={{ textAlign: 'center' }}>Controls</h3>

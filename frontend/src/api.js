@@ -54,7 +54,7 @@ export const api = {
   requestWithdrawal: (address, points) =>
     apiCall('/withdrawal/request', { method: 'POST', body: { address, points } }),
   withdrawalHistory: () => apiCall('/withdrawal/history'),
-  recentPayouts: () => apiCall('/withdrawal/recent-payouts'),
+  recentPayouts: (limit) => apiCall(`/withdrawal/recent-payouts${limit ? `?limit=${limit}` : ''}`),
   adWatchStatus: () => apiCall('/tasks/ad-watch/status'),
   prepareAdWatch: (network) => apiCall('/tasks/ad-watch/prepare', { method: 'POST', body: { network } }),
   claimAdWatch: (network, nonce) => apiCall('/tasks/ad-watch/claim', { method: 'POST', body: { network, nonce } }),

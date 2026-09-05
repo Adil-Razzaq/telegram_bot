@@ -31,7 +31,11 @@ router.get('/history', telegramAuth, async (req, res) => {
 // withdrawalService.js for why this exists.
 router.get('/recent-payouts', telegramAuth, async (req, res) => {
   try {
-    const payouts = await getRecentPayouts({});
+    // Default 20 for the inline board; the "view all" popup asks for
+    // more via ?limit= — capped at 200 regardless, no unbounded queries.
+    const requested = Number(req.query.limit);
+    const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 20;
+    const payouts = await getRecentPayouts({ limit });
     res.json({ ok: true, payouts });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
