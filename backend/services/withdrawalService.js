@@ -10,12 +10,15 @@ const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/m
 // user-friendly form (48 base64url chars, starting EQ/UQ/kQ/0Q) and the
 // raw form (workchain:hex), since different wallets/tools surface either.
 const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
-const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at the default 10,000 pts = $1 rate
+// Was a hardcoded constant here; now admin-editable (Settings →
+// min_withdrawal_points, default still 500 = $0.05 at the default
+// 10,000 pts = $1 rate) — see validateWithdrawalInputs below.
+const MIN_WITHDRAWAL_POINTS = 500;
 
 // Shared validation between prepare and the actual request — re-run in
 // full at request time too (not just here), since balance/flag/address
 // could all still change in the time it takes to watch an ad.
-function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
+async function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
   if (!withdrawalsFlag.enabled) {
     const err = new Error(withdrawalsFlag.message || 'Withdrawals are temporarily unavailable.');
     err.statusCode = 403;
@@ -26,8 +29,9 @@ function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
     err.statusCode = 400;
     throw err;
   }
-  if (!Number.isInteger(points) || points < MIN_WITHDRAWAL_POINTS) {
-    const err = new Error(`points must be an integer >= ${MIN_WITHDRAWAL_POINTS}`);
+  const minPoints = await getSetting('min_withdrawal_points');
+  if (!Number.isInteger(points) || points < minPoints) {
+    const err = new Error(`points must be an integer >= ${minPoints}`);
     err.statusCode = 400;
     throw err;
   }
@@ -38,7 +42,7 @@ function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
 // two-step pattern as every other ad-gated action (spin, miner, etc.).
 async function prepareWithdrawal({ telegramId, address, points }) {
   const withdrawalsFlag = await getFlag('withdrawals');
-  validateWithdrawalInputs({ address, points, withdrawalsFlag });
+  await validateWithdrawalInputs({ address, points, withdrawalsFlag });
 
   const userRes = await client.execute({
     sql: 'SELECT main_balance FROM users WHERE telegram_id = ?',
@@ -63,7 +67,7 @@ async function requestWithdrawal({ telegramId, address, points, nonce }) {
   await consumeAdEventIfRequired({ nonce, telegramId, action: 'withdrawal_request' });
 
   const withdrawalsFlag = await getFlag('withdrawals');
-  validateWithdrawalInputs({ address, points, withdrawalsFlag });
+  await validateWithdrawalInputs({ address, points, withdrawalsFlag });
 
   const tx = await client.transaction('write');
   try {

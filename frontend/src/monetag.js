@@ -101,12 +101,18 @@ export function enableInAppInterstitial({
 }
 
 /**
- * The backend won't credit a reward until Monetag's postback has
- * confirmed the nonce, and that postback can land a second or two after
- * the ad-shown promise above resolves. Rather than fail immediately,
- * retry the confirm-and-spend call briefly.
+ * The backend won't credit a reward until the ad network's postback has
+ * confirmed the nonce, and that postback can land several seconds after
+ * the ad-shown promise above resolves — Adsgram's Reward Url in
+ * particular has been observed landing noticeably later than Monetag's.
+ * Rather than fail immediately, retry the confirm-and-spend call for a
+ * while. (Was 5 attempts / 1.5s = ~6s total; bumped to give slow
+ * postbacks more room before surfacing "not yet confirmed" to the user.
+ * If it's STILL failing after this, the postback likely isn't arriving
+ * at all — see ADSGRAM_VERIFY_SECRET / the Reward Url setup in
+ * routes/bot.js, not a timing issue.)
  */
-export async function withConfirmationRetry(callFn, { attempts = 5, delayMs = 1500 } = {}) {
+export async function withConfirmationRetry(callFn, { attempts = 10, delayMs = 2000 } = {}) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {

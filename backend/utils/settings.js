@@ -102,6 +102,12 @@ const SETTING_DEFS = {
   // requested points regardless — the fee only reduces the payout.
   withdrawal_fee_flat_points: { type: 'number', default: 0, min: 0 },
   withdrawal_fee_percent: { type: 'number', default: 0, min: 0, max: 100 },
+  // Minimum points a user must request per withdrawal. Was previously a
+  // hardcoded constant (MIN_WITHDRAWAL_POINTS = 500) in
+  // withdrawalService.js — now admin-editable here instead, same 500
+  // default so nothing changes for existing deployments until an admin
+  // actually changes it.
+  min_withdrawal_points: { type: 'number', default: 500, min: 0 },
 
   // Live Payouts board (Profile tab) display mode. Off (default) =
   // current behavior: a single foldable list showing everything.

@@ -145,10 +145,13 @@ export default function Wallet({
   const flatFee = config?.withdrawal_fee_flat_points || 0;
   const feePercent = config?.withdrawal_fee_percent || 0;
   const withdrawalsDisabled = config?.withdrawals && config.withdrawals.enabled === false;
+  // Admin-editable (Settings → Minimum withdrawal amount) — falls back to
+  // the old hardcoded default only until /user/config has loaded.
+  const minWithdrawalPoints = config?.min_withdrawal_points ?? MIN_WITHDRAWAL_POINTS;
   const pointsNum = Number(points);
   const addressValid = TON_ADDRESS_REGEX.test(address);
   const amountValid =
-    Number.isInteger(pointsNum) && pointsNum >= MIN_WITHDRAWAL_POINTS && pointsNum <= mainBalance;
+    Number.isInteger(pointsNum) && pointsNum >= minWithdrawalPoints && pointsNum <= mainBalance;
   const canSubmit = addressValid && amountValid && !submitting;
 
   // Same shape as a typical "network fee" breakdown — fee expressed in
@@ -369,17 +372,17 @@ export default function Wallet({
           </label>
 
           <label>
-            ADLX to withdraw (min {MIN_WITHDRAWAL_POINTS})
+            ADLX to withdraw (min {minWithdrawalPoints})
             <input
               type="number"
               value={points}
               onChange={(e) => setPoints(e.target.value)}
-              min={MIN_WITHDRAWAL_POINTS}
+              min={minWithdrawalPoints}
               max={mainBalance}
             />
             {points && !amountValid && (
               <span className="field-error">
-                Enter a whole number between {MIN_WITHDRAWAL_POINTS} and {mainBalance}
+                Enter a whole number between {minWithdrawalPoints} and {mainBalance}
               </span>
             )}
           </label>
