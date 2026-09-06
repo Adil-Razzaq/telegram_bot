@@ -109,11 +109,14 @@ function boostBonusPoints(row, settings) {
   return { banked, active, total: banked + active };
 }
 
-// Prorated accrual RIGHT NOW for a running cycle — floored, so a claim
-// can never pay out more than has genuinely elapsed. Normal 1x
+// Prorated accrual RIGHT NOW for a running cycle — unfloored. Normal 1x
 // trajectory plus whatever boost bonus (banked + active window) has
-// accumulated.
-function accruedNow(row, settings) {
+// accumulated. This is the source of truth both for the floored payout
+// amount (accruedNow, below) and for the frontend's live-ticking
+// display (accrued_now_precise in getStatus) — the display needs the
+// unfloored value so a boosted counter can climb smoothly instead of
+// being capped at the unboosted cycle target.
+function accruedNowPrecise(row, settings) {
   if (row.status !== 'running') return 0;
   const totalSeconds = cycleTotalSeconds(row);
   const startedAt = new Date(row.cycle_started_at + 'Z').getTime();
@@ -121,7 +124,13 @@ function accruedNow(row, settings) {
   const cyclePoints = currentCyclePoints(row, settings);
   const baseAccrued = cyclePoints * (elapsedSeconds / totalSeconds);
   const { total: bonus } = boostBonusPoints(row, settings);
-  return Math.floor(baseAccrued + bonus);
+  return baseAccrued + bonus;
+}
+
+// Floored version — used for actual payout, so a claim can never pay
+// out more than has genuinely elapsed.
+function accruedNow(row, settings) {
+  return Math.floor(accruedNowPrecise(row, settings));
 }
 
 async function getStatus({ telegramId }) {
@@ -164,6 +173,10 @@ async function getStatus({ telegramId }) {
     current_cycle_points: row.status === 'running' ? cyclePoints : 0,
     rate_per_second: effectiveRate,
     accrued_now: accruedNow(row, settings),
+    // Unfloored — lets the frontend's live counter climb smoothly and
+    // reflect boosted earnings past the base cycle target instead of
+    // being capped at it. Never used for payout (see accruedNow).
+    accrued_now_precise: accruedNowPrecise(row, settings),
     next_cycle_points: cyclesRemaining > 0 ? cyclePoints : 0,
     can_start: row.status === 'idle' && cyclesRemaining > 0,
     daily_points: miner_daily_points,

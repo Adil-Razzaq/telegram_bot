@@ -22,25 +22,34 @@ function formatBoostCountdown(totalSeconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// The single source of truth for the ticking display: a stable anchor
-// (cycle_started_at, which only changes on a fresh Start) plus a rate —
-// never re-derived from a periodically-floored snapshot (accrued_now),
-// which is what caused the "counts up then snaps back to a whole
-// number" glitch this replaces. Both Start and Boost responses, and
-// every 15s poll, all funnel through this one function so the number
-// only ever climbs, never resets.
+// The single source of truth for the ticking display: a floor (the
+// server's precise, unfloored accrued-so-far amount at the moment we
+// last heard from it) plus a rate, anchored to right now. Every 15s
+// poll and every Start/Boost response resets the floor to the fresh
+// server value and the anchor to now, then between updates the number
+// is extrapolated forward as floor + rate*elapsed.
+//
+// This floor is what lets a boosted rate actually show past the base
+// cycle target — previously this capped at current_cycle_points (the
+// UNBOOSTED target), so the live counter would freeze there even
+// though boost bonus kept accruing server-side and would still be
+// paid out correctly at claim. Anchoring to the server's own running
+// total (accrued_now_precise) instead of re-deriving from
+// cycle_started_at each time also means a mid-cycle rate change
+// (boost turning on/off) can't retroactively over- or under-count
+// time that elapsed under a different rate.
 function computeSyncFromStatus(s) {
-  if (!s || s.status !== 'running') return { startedAt: 0, rate: 0, cap: 0 };
+  if (!s || s.status !== 'running') return { anchor: 0, floor: 0, rate: 0 };
   return {
-    startedAt: new Date(s.cycle_started_at + 'Z').getTime(),
+    anchor: Date.now(),
+    floor: s.accrued_now_precise ?? s.accrued_now ?? 0,
     rate: s.rate_per_second,
-    cap: s.current_cycle_points,
   };
 }
 function readSync(sync) {
-  if (!sync.rate) return 0;
-  const elapsed = (Date.now() - sync.startedAt) / 1000;
-  return Math.min(sync.cap, sync.rate * elapsed);
+  if (!sync.rate && !sync.floor) return 0;
+  const elapsed = Math.max(0, (Date.now() - sync.anchor) / 1000);
+  return sync.floor + sync.rate * elapsed;
 }
 
 function shortAddress(addr) {
@@ -107,14 +116,15 @@ export default function Miner({
   const tickRef = useRef(null);
   const pollRef = useRef(null);
   const toastTimerRef = useRef(null);
-  // Deliberately NOT keyed off accrued_now (a floored integer, re-sent
-  // every 15s poll) — animating from that caused the exact glitch being
-  // fixed here: the decimal climbs smoothly for 15s then snaps back to
-  // a whole number the instant a poll lands. Instead this derives the
-  // displayed value purely from elapsed time × rate, anchored to
-  // cycle_started_at, which never changes between polls (only a fresh
-  // Start/Boost legitimately changes it) — so there's nothing to snap
-  // back to, the number only ever climbs.
+  // Deliberately anchored to accrued_now_precise (the server's
+  // unfloored running total) rather than the floored accrued_now —
+  // animating from a floored value re-sent every 15s poll caused the
+  // "counts up then snaps back to a whole number" glitch. Re-anchoring
+  // the floor + start time on every poll/Start/Boost, then
+  // extrapolating forward with the current rate in between, means the
+  // number only ever climbs (each new floor is >= the last extrapolated
+  // value) and correctly reflects a boosted rate instead of capping at
+  // the unboosted cycle target.
   const syncRef = useRef(computeSyncFromStatus(cached?.status));
   // Same anchor-based approach for the boost renewal countdown —
   // expiresAtMs is fixed at the moment we learn about it (poll or
