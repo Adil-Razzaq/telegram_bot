@@ -219,7 +219,12 @@
       }
       listEl.innerHTML = withdrawals.map((w) => `
         <div class="withdrawal-item" id="w-${w.id}">
-          <div><strong>${w.points_deducted} pts</strong> ($${w.amount_usd.toFixed(2)}) — user ${w.telegram_id}</div>
+          <div><strong>${w.points_deducted} pts</strong> ($${w.amount_usd.toFixed(2)}) — ${w.username ? '@' + w.username : 'no username'} (user ${w.telegram_id})</div>
+          <div class="withdrawal-meta">
+            Request ID: <code id="wid-${w.id}">${w.id}</code>
+            <button type="button" class="secondary" onclick="copyWithdrawalId('${w.id}', this)">Copy ID</button>
+            — quote this ID if the user contacts support about this withdrawal
+          </div>
           <div class="withdrawal-meta">${w.usdt_bep20_address}</div>
           <div class="muted">${new Date(w.created_at).toLocaleString()}</div>
           <div class="row" style="margin-top:8px">
@@ -233,6 +238,15 @@
       `).join('');
     } catch (e) {
       listEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
+    }
+  }
+
+  function copyWithdrawalId(id, btn) {
+    navigator.clipboard?.writeText(id);
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => { btn.textContent = original; }, 1500);
     }
   }
 

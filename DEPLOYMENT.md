@@ -230,6 +230,30 @@ watching a real Monetag ad — if you skip step 7, you'll see "Monetag SDK
 not loaded" instead of it working, which is expected until that's wired
 up. Connect a Tonkeeper wallet from the Profile tab to test withdrawals.
 
+## Ongoing: stopping bot-farmed referrals
+
+Three new admin-panel settings (Settings tab — no deploy needed, and all
+default to **off**, so nothing changes until you set them):
+
+- `official_channels` — comma-separated channel usernames/IDs the bot
+  must be an admin of (e.g. `@YourChannel,@YourSecondChannel`). Leave
+  blank and the two gates below do nothing even if turned on.
+- `referral_qualify_miner_cycles` — a referred user must complete this
+  many mining cycles (lifetime, not per-day) before their referrer gets
+  the referral reward. `0` = old behavior (instant credit on /start).
+  Try `2` or `3`.
+- `referral_require_channel_join` — on top of the above, the referred
+  user must also have joined every channel in `official_channels`
+  before their referrer is credited.
+- `withdrawal_require_channel_join` — a user must have joined every
+  channel in `official_channels` before they can request a withdrawal.
+
+Turn these on together: set `official_channels`, set
+`referral_qualify_miner_cycles` to `2` or `3`, then flip
+`referral_require_channel_join` and/or `withdrawal_require_channel_join`
+to on. Existing referrals already linked (or already rewarded) aren't
+touched — this only changes what happens going forward.
+
 ## Ongoing: reviewing withdrawals
 
 `GET https://your-backend-url/api/admin/withdrawals/pending` (with

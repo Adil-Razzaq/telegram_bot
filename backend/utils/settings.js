@@ -141,6 +141,33 @@ const SETTING_DEFS = {
   // action_ads_network and auto_ad_network, own dedicated switch as
   // requested.
   streak_ad_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
+
+  // --- Anti-bot-farm gating (referral qualification + withdrawal channel gate) ---
+  // Comma-separated Telegram channel usernames/IDs (e.g.
+  // "@YourChannel,@YourSecondChannel") treated as "official channels" by
+  // BOTH gates below. Same requirement as telegram_join tasks: the bot
+  // must be an admin of every channel listed, or membership checks fail
+  // closed (see taskService.js's checkOfficialChannelsMembership).
+  // Empty by default = nothing to check, so turning either gate on below
+  // has no effect until you actually list a channel here.
+  official_channels: { type: 'string', default: '' },
+  // How many mining cycles a REFERRED user must complete (lifetime,
+  // users.total_miner_cycles_completed) before their referrer is
+  // credited. 0 (default) = OFF, meaning referrals are credited
+  // instantly on /start exactly like before this setting existed —
+  // nothing changes for an existing deployment until this is raised.
+  referral_qualify_miner_cycles: { type: 'number', default: 0, min: 0 },
+  // When true, a referred user must also have joined every channel in
+  // official_channels before their referrer is credited. Default off —
+  // same "no behavior change until explicitly turned on" reasoning as
+  // above. If official_channels is empty this has no effect even when
+  // true.
+  referral_require_channel_join: { type: 'boolean', default: false },
+  // When true, a user must have joined every channel in
+  // official_channels before they can request (or even prepare) a
+  // withdrawal. Default off; if official_channels is empty this has no
+  // effect even when true.
+  withdrawal_require_channel_join: { type: 'boolean', default: false },
 };
 
 // Flat key -> default value, kept for backward compatibility with code

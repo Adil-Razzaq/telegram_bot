@@ -65,6 +65,17 @@ export default function Wallet({
   // when opened, not kept loaded all the time.
   const [showAllPayoutsModal, setShowAllPayoutsModal] = useState(false);
   const [allPayouts, setAllPayouts] = useState(null);
+  // Tracks which withdrawal's ID was just copied, so only that one
+  // history item's button flips to "Copied" — same pattern as
+  // Friends.jsx's link-copy button, just keyed per-item since there can
+  // be several withdrawals in the list at once.
+  const [copiedId, setCopiedId] = useState(null);
+
+  function copyWithdrawalId(id) {
+    navigator.clipboard?.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 2000);
+  }
 
   async function loadPayouts() {
     try {
@@ -162,6 +173,17 @@ export default function Wallet({
   const netPoints = amountValid ? Math.max(0, pointsNum - feePoints) : 0;
   const hasFee = flatFee > 0 || feePercent > 0;
 
+  // Mirrors the backend gate in withdrawalService.js's
+  // validateWithdrawalInputs: only shown when an admin has actually
+  // turned this on AND listed a channel — matches exactly when a
+  // withdrawal could really get rejected for this reason, so it never
+  // shows a warning that doesn't apply.
+  const requiredChannels = (config?.official_channels || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const channelJoinRequired = Boolean(config?.withdrawal_require_channel_join) && requiredChannels.length > 0;
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -173,7 +195,9 @@ export default function Wallet({
       await showActionAd(nonce, config);
       const { withdrawal } = await withConfirmationRetry(() => api.requestWithdrawal(address, pointsNum, nonce));
       onBalanceChange(mainBalance - pointsNum);
-      setSuccessMsg(`Withdrawal of $${withdrawal.amount_usd.toFixed(2)} submitted — pending review.`);
+      setSuccessMsg(
+        `Withdrawal of $${withdrawal.amount_usd.toFixed(2)} submitted — pending review. Request ID: ${withdrawal.id} (save this for support).`
+      );
       setPoints('');
       await loadHistory();
     } catch (e) {
@@ -361,6 +385,13 @@ export default function Wallet({
 
       {showWithdrawForm && !withdrawalsDisabled && (
         <form onSubmit={handleSubmit} className="wallet-form">
+          {channelJoinRequired && (
+            <p className="wallet-hint">
+              ⓘ Withdrawal requests are rejected unless you've joined{' '}
+              {requiredChannels.length > 1 ? 'our official channels' : 'our official channel'}:{' '}
+              {requiredChannels.join(', ')}
+            </p>
+          )}
           <label>
             TON wallet address
             <input
@@ -453,6 +484,17 @@ export default function Wallet({
                         View on Tonviewer
                       </a>
                     )}
+                  </div>
+                  <div className="wallet-history-meta">
+                    Request ID: <code>{w.id}</code>{' '}
+                    <button
+                      type="button"
+                      className="ghost-pill"
+                      onClick={() => copyWithdrawalId(w.id)}
+                      style={{ padding: '2px 10px', fontSize: 11 }}
+                    >
+                      {copiedId === w.id ? 'Copied' : 'Copy'}
+                    </button>
                   </div>
                 </li>
               ))}

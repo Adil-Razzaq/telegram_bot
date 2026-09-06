@@ -1,6 +1,7 @@
 const { client, rolloverMinerCyclesIfNeeded } = require('../db/db');
 const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getAllSettings } = require('../utils/settings');
+const { maybeQualifyReferral } = require('./referralService');
 
 /**
  * Manual, ad-gated, cycle-based miner:
@@ -303,6 +304,13 @@ async function claim({ telegramId, nonce }) {
             WHERE telegram_id = ?`,
       args: [telegramId],
     });
+    // Lifetime counter (never resets, unlike cycles_completed_today
+    // above) — this is what referral-qualification gating checks
+    // against settings.referral_qualify_miner_cycles below.
+    await tx.execute({
+      sql: 'UPDATE users SET total_miner_cycles_completed = total_miner_cycles_completed + 1 WHERE telegram_id = ?',
+      args: [telegramId],
+    });
     await tx.execute({
       sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
       args: [telegramId, 'miner_claim', earnedPoints, JSON.stringify({ cycleIndex: row.cycles_completed_today })],
@@ -313,6 +321,17 @@ async function claim({ telegramId, nonce }) {
       args: [telegramId],
     });
     await tx.commit();
+
+    // Anti-bot-farm referral gating (see referralService.js) — checks
+    // whether THIS user was referred and, now that they've completed
+    // another cycle, finally qualifies their referrer for the reward.
+    // A no-op when gating is off (the default) or conditions aren't met
+    // yet. Deliberately outside the transaction above and never allowed
+    // to throw, so a bug or a slow Telegram API call here can never
+    // block or fail the claim itself — the points are already paid out.
+    maybeQualifyReferral(telegramId).catch((e) =>
+      console.error('Referral qualification check failed after miner claim:', e.message)
+    );
 
     return { earned_points: earnedPoints, main_balance: updatedUserRes.rows[0].main_balance };
   } catch (err) {

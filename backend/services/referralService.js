@@ -1,6 +1,7 @@
 const { client, rolloverUserRefCounterIfNeeded } = require('../db/db');
 const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 const { getSetting } = require('../utils/settings');
+const { checkOfficialChannelsMembership } = require('./taskService');
 
 // Default 100 pts/claim (utils/settings.js) — tunable live via the admin
 // panel's Settings section without a deploy.
@@ -13,13 +14,29 @@ const COOLDOWN_SECONDS = 60;
 // matter how correct the claim/cooldown logic downstream was.
 // Idempotent via users.referred_by: a user can only ever be credited to
 // one referrer, once, no matter how many times /start fires for them.
+//
+// ANTI-BOT-FARM GATING: when settings.referral_qualify_miner_cycles > 0
+// and/or settings.referral_require_channel_join is true, this no longer
+// credits the reward immediately — it only links referred_by (still
+// idempotent, still one-shot). The actual reward is credited later by
+// maybeQualifyReferral, once the REFERRED user has genuinely completed
+// that many mining cycles and (if required) joined every channel in
+// settings.official_channels — see minerService.js's claim(), which
+// calls maybeQualifyReferral after every completed cycle. With both
+// settings left at their defaults (0 / false), behavior is UNCHANGED
+// from before: instant credit, exactly like today.
 async function grantReferral({ referrerId, referredTelegramId }) {
-  const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
   if (referrerId === referredTelegramId) {
     const err = new Error('Self-referral is not allowed');
     err.statusCode = 400;
     throw err;
   }
+
+  const [requiredCycles, requireChannelJoin] = await Promise.all([
+    getSetting('referral_qualify_miner_cycles'),
+    getSetting('referral_require_channel_join'),
+  ]);
+  const gatingActive = requiredCycles > 0 || requireChannelJoin;
 
   const tx = await client.transaction('write');
   try {
@@ -46,14 +63,34 @@ async function grantReferral({ referrerId, referredTelegramId }) {
       sql: 'UPDATE users SET referred_by = ? WHERE telegram_id = ?',
       args: [referrerId, referredTelegramId],
     });
-    await tx.execute({
-      sql: 'UPDATE users SET pending_referral_balance = pending_referral_balance + ? WHERE telegram_id = ?',
-      args: [REFERRAL_BASE_REWARD, referrerId],
-    });
-    await tx.execute({
-      sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
-      args: [referrerId, 'referral_grant', REFERRAL_BASE_REWARD, JSON.stringify({ referredTelegramId })],
-    });
+
+    if (gatingActive) {
+      // Link only — no reward yet. Recorded as its own ledger type
+      // (0 points) purely for audit visibility ("this referral exists
+      // and is awaiting qualification"), distinct from 'referral_grant'
+      // which always means points actually moved.
+      await tx.execute({
+        sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
+        args: [referrerId, 'referral_linked', 0, JSON.stringify({ referredTelegramId, pendingQualification: true })],
+      });
+    } else {
+      const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
+      await tx.execute({
+        sql: 'UPDATE users SET pending_referral_balance = pending_referral_balance + ? WHERE telegram_id = ?',
+        args: [REFERRAL_BASE_REWARD, referrerId],
+      });
+      await tx.execute({
+        sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
+        args: [referrerId, 'referral_grant', REFERRAL_BASE_REWARD, JSON.stringify({ referredTelegramId })],
+      });
+      // Old path also stays the source of truth for "already rewarded",
+      // so maybeQualifyReferral (if gating gets turned on later) never
+      // double-grants this same referral.
+      await tx.execute({
+        sql: 'UPDATE users SET referral_qualified = 1 WHERE telegram_id = ?',
+        args: [referredTelegramId],
+      });
+    }
 
     const updatedRes = await tx.execute({
       sql: 'SELECT * FROM users WHERE telegram_id = ?',
@@ -64,6 +101,91 @@ async function grantReferral({ referrerId, referredTelegramId }) {
   } catch (err) {
     await tx.rollback().catch(() => {});
     throw err;
+  }
+}
+
+// Called after a referred user does something that could newly satisfy
+// referral qualification — today that's exclusively "completed a mining
+// cycle" (see minerService.js's claim()), since that's the one event
+// guaranteed to fire repeatedly for an active user, so even
+// channel-join-only gating (requiredCycles = 0) still gets re-checked
+// each time they mine. Safe to call any time: a no-op unless the user
+// was actually referred, isn't already qualified, and now genuinely
+// meets every condition currently configured. Never throws — a bad
+// channel config or a transient Telegram API error should never break
+// whatever the caller (e.g. a mining claim) was doing; it just means
+// qualification is deferred to the next attempt.
+async function maybeQualifyReferral(referredTelegramId) {
+  try {
+    const [requiredCycles, requireChannelJoin, referralReward] = await Promise.all([
+      getSetting('referral_qualify_miner_cycles'),
+      getSetting('referral_require_channel_join'),
+      getSetting('referral_reward'),
+    ]);
+
+    const userRes = await client.execute({
+      sql: 'SELECT referred_by, referral_qualified, total_miner_cycles_completed FROM users WHERE telegram_id = ?',
+      args: [referredTelegramId],
+    });
+    const user = userRes.rows[0];
+    if (!user || !user.referred_by || user.referral_qualified) return false;
+
+    if (requiredCycles > 0 && (user.total_miner_cycles_completed || 0) < requiredCycles) {
+      return false;
+    }
+
+    if (requireChannelJoin) {
+      let membership;
+      try {
+        membership = await checkOfficialChannelsMembership(referredTelegramId);
+      } catch (e) {
+        console.error('Referral qualification: channel check failed —', e.message);
+        return false;
+      }
+      if (!membership.joined) return false;
+    }
+
+    const tx = await client.transaction('write');
+    try {
+      // Re-check inside the transaction, locking out any race between
+      // two triggers (e.g. two rapid mining claims) firing at once —
+      // whichever commits first wins, the other sees referral_qualified
+      // already 1 and backs out without granting twice.
+      const lockedRes = await tx.execute({
+        sql: 'SELECT referred_by, referral_qualified FROM users WHERE telegram_id = ?',
+        args: [referredTelegramId],
+      });
+      const locked = lockedRes.rows[0];
+      if (!locked || !locked.referred_by || locked.referral_qualified) {
+        await tx.rollback().catch(() => {});
+        return false;
+      }
+
+      await tx.execute({
+        sql: 'UPDATE users SET referral_qualified = 1 WHERE telegram_id = ?',
+        args: [referredTelegramId],
+      });
+      await tx.execute({
+        sql: 'INSERT OR IGNORE INTO users (telegram_id) VALUES (?)',
+        args: [locked.referred_by],
+      });
+      await tx.execute({
+        sql: 'UPDATE users SET pending_referral_balance = pending_referral_balance + ? WHERE telegram_id = ?',
+        args: [referralReward, locked.referred_by],
+      });
+      await tx.execute({
+        sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
+        args: [locked.referred_by, 'referral_grant', referralReward, JSON.stringify({ referredTelegramId, qualified: true })],
+      });
+      await tx.commit();
+      return true;
+    } catch (err) {
+      await tx.rollback().catch(() => {});
+      throw err;
+    }
+  } catch (err) {
+    console.error('maybeQualifyReferral failed:', err.message);
+    return false;
   }
 }
 
@@ -133,4 +255,11 @@ async function claimReferral({ telegramId, nonce }) {
   }
 }
 
-module.exports = { grantReferral, prepareClaim, claimReferral, DAILY_CLAIM_CAP, COOLDOWN_SECONDS };
+module.exports = {
+  grantReferral,
+  maybeQualifyReferral,
+  prepareClaim,
+  claimReferral,
+  DAILY_CLAIM_CAP,
+  COOLDOWN_SECONDS,
+};

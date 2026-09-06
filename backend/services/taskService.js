@@ -1,5 +1,6 @@
 const { client } = require('../db/db');
 const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
+const { getSetting } = require('../utils/settings');
 
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
@@ -39,6 +40,46 @@ async function isChannelMember(channelId, telegramId) {
   }
 
   return ['member', 'administrator', 'creator'].includes(data.result.status);
+}
+
+/**
+ * Shared "have they joined every official channel" check, used by both
+ * the referral-qualification gate (referralService.js) and the
+ * withdrawal channel gate (withdrawalService.js), on top of the same
+ * settings.official_channels list (comma-separated usernames/IDs).
+ *
+ * Fails OPEN when official_channels is empty (nothing configured =
+ * nothing to check — a blank setting can never lock everyone out), but
+ * fails CLOSED on an actual verification error, same as isChannelMember
+ * itself: an unclear result never counts as "joined".
+ */
+async function checkOfficialChannelsMembership(telegramId) {
+  const raw = await getSetting('official_channels');
+  const channels = String(raw || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+
+  if (channels.length === 0) {
+    return { required: [], joined: true, missing: [] };
+  }
+
+  const missing = [];
+  for (const channelId of channels) {
+    let isMember;
+    try {
+      isMember = await isChannelMember(channelId, telegramId);
+    } catch (e) {
+      const err = new Error(
+        `Can't verify membership right now — make sure the bot is an admin of ${channelId}, then try again`
+      );
+      err.isVerificationError = true;
+      err.channelId = channelId;
+      throw err;
+    }
+    if (!isMember) missing.push(channelId);
+  }
+  return { required: channels, joined: missing.length === 0, missing };
 }
 
 async function listTasksForUser({ telegramId }) {
@@ -278,6 +319,7 @@ module.exports = {
   updateTask,
   deleteTask,
   isChannelMember,
+  checkOfficialChannelsMembership,
   prepareAdTask,
   claimAdTask,
 };

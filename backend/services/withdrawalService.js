@@ -4,6 +4,7 @@ const { sendTelegramMessage } = require('../utils/telegram');
 const { getSetting } = require('../utils/settings');
 const { getFlag } = require('../utils/featureFlags');
 const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
+const { checkOfficialChannelsMembership } = require('./taskService');
 
 // TON addresses, not BEP-20 — matches the TON Connect / Tonkeeper wallet
 // integration (see walletService.js). Accepts both the common
@@ -18,7 +19,7 @@ const MIN_WITHDRAWAL_POINTS = 500;
 // Shared validation between prepare and the actual request — re-run in
 // full at request time too (not just here), since balance/flag/address
 // could all still change in the time it takes to watch an ad.
-async function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
+async function validateWithdrawalInputs({ telegramId, address, points, withdrawalsFlag }) {
   if (!withdrawalsFlag.enabled) {
     const err = new Error(withdrawalsFlag.message || 'Withdrawals are temporarily unavailable.');
     err.statusCode = 403;
@@ -35,6 +36,32 @@ async function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
     err.statusCode = 400;
     throw err;
   }
+
+  // ANTI-BOT-FARM GATING: off by default (settings.withdrawal_require_channel_join
+  // = false) — behavior is unchanged until this is explicitly turned on
+  // in the admin panel AND settings.official_channels is populated.
+  const requireChannelJoin = await getSetting('withdrawal_require_channel_join');
+  if (requireChannelJoin) {
+    let membership;
+    try {
+      membership = await checkOfficialChannelsMembership(telegramId);
+    } catch (e) {
+      // Bot isn't an admin of one of the configured channels, or a
+      // network blip talking to Telegram — an admin-fixable problem,
+      // not the user's fault, so this is a 503 (try again shortly), not
+      // a 403.
+      const err = new Error(e.message || "Can't verify channel membership right now — try again shortly");
+      err.statusCode = 503;
+      throw err;
+    }
+    if (!membership.joined) {
+      const err = new Error(
+        `Join our official channel${membership.missing.length > 1 ? 's' : ''} before withdrawing: ${membership.missing.join(', ')}`
+      );
+      err.statusCode = 403;
+      throw err;
+    }
+  }
 }
 
 // Step 1: validate the request looks legitimate (flag on, address format
@@ -42,7 +69,7 @@ async function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
 // two-step pattern as every other ad-gated action (spin, miner, etc.).
 async function prepareWithdrawal({ telegramId, address, points }) {
   const withdrawalsFlag = await getFlag('withdrawals');
-  await validateWithdrawalInputs({ address, points, withdrawalsFlag });
+  await validateWithdrawalInputs({ telegramId, address, points, withdrawalsFlag });
 
   const userRes = await client.execute({
     sql: 'SELECT main_balance FROM users WHERE telegram_id = ?',
@@ -67,7 +94,7 @@ async function requestWithdrawal({ telegramId, address, points, nonce }) {
   await consumeAdEventIfRequired({ nonce, telegramId, action: 'withdrawal_request' });
 
   const withdrawalsFlag = await getFlag('withdrawals');
-  await validateWithdrawalInputs({ address, points, withdrawalsFlag });
+  await validateWithdrawalInputs({ telegramId, address, points, withdrawalsFlag });
 
   const tx = await client.transaction('write');
   try {
@@ -137,7 +164,11 @@ async function requestWithdrawal({ telegramId, address, points, nonce }) {
 
 async function listPendingWithdrawals() {
   const res = await client.execute(
-    `SELECT * FROM withdrawals WHERE status = 'PENDING' ORDER BY created_at ASC`
+    `SELECT w.*, u.username
+     FROM withdrawals w
+     LEFT JOIN users u ON u.telegram_id = w.telegram_id
+     WHERE w.status = 'PENDING'
+     ORDER BY w.created_at ASC`
   );
   return res.rows;
 }

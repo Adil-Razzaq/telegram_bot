@@ -53,6 +53,17 @@ const COLUMNS_TO_ENSURE = [
   // Adsgram didn't exist in this table before now.
   { table: 'ad_postback_log', column: 'network', ddl: "TEXT DEFAULT 'monetag'" },
   { table: 'users', column: 'free_spins_used', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED (referral anti-bot-farm gating): lifetime count of completed
+  // mining cycles, separate from miner_state.cycles_completed_today
+  // (which resets daily) — this is what referralService.maybeQualifyReferral
+  // compares against settings.referral_qualify_miner_cycles. Incremented
+  // in minerService.js's claim(), never reset.
+  { table: 'users', column: 'total_miner_cycles_completed', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED: set to 1 the moment a referral's reward has actually been
+  // credited to the referrer (whether instantly, when qualification
+  // gating is off, or later once maybeQualifyReferral's conditions are
+  // met). Prevents a referral from ever being rewarded twice.
+  { table: 'users', column: 'referral_qualified', ddl: 'INTEGER DEFAULT 0' },
 ];
 
 async function ensureColumn(table, column, ddl) {

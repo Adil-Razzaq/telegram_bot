@@ -541,6 +541,7 @@ h3 {
 
 .field-error { color: var(--danger); font-size: 12px; }
 .wallet-success { color: var(--success); font-size: 13px; }
+.wallet-hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .wallet-empty { color: var(--muted); font-size: 13px; }
 
 .wallet-history { list-style: none; padding: 0; margin: 0; }
