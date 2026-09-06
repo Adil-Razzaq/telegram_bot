@@ -35,6 +35,19 @@ const NONCE_TTL_MINUTES = 15;
 
 async function startAdEvent({ telegramId, action }) {
   const nonce = crypto.randomBytes(16).toString('hex');
+  // Retire any earlier still-'pending' row for this exact telegram_id +
+  // action first. Harmless for Monetag (it confirms by exact ymid, so a
+  // stale row here was never going to match anything anyway), but
+  // required for Adsgram's dedicated-block flows (daily_watch:adsgram,
+  // adsgram_task_banner), which confirm by "oldest pending FOR THIS
+  // ACTION" — an abandoned earlier attempt would otherwise sit ahead of
+  // the new nonce and steal its confirmation. See startAdEventIfRequired
+  // below for the analogous cross-action fix on the shared-block flows.
+  await client.execute({
+    sql: `DELETE FROM pending_ad_events WHERE telegram_id = ? AND action = ? AND status = 'pending'`,
+    args: [telegramId, action],
+  });
+
   await client.execute({
     sql: 'INSERT INTO pending_ad_events (nonce, telegram_id, action) VALUES (?, ?, ?)',
     args: [nonce, telegramId, action],
@@ -139,6 +152,14 @@ async function confirmOldestPendingByUser({ telegramId, action, estimatedPrice =
 
 const { getAllSettings } = require('./settings');
 
+// The four actions that share ONE adsgram_block_id / one no-action
+// Reward Url when action_ads_network === 'adsgram' (see the big comment
+// on confirmOldestPendingByUser above and routes/bot.js). Adsgram's
+// postback for any of these confirms whichever row is the OLDEST still
+// 'pending' for that telegram_id, with zero regard for which action it
+// belongs to.
+const SHARED_ADSGRAM_ACTIONS = new Set(['spin', 'miner_start', 'miner_claim', 'referral_claim']);
+
 // Every reward-gated action (spin, miner start/claim, referral claim,
 // task claim, watch-ad tasks) goes through these two instead of calling
 // startAdEvent/consumeAdEvent directly, so the admin's single
@@ -147,8 +168,31 @@ const { getAllSettings } = require('./settings');
 // entirely — see each component's handleX function) and consume is a
 // no-op (nothing to verify, the ad requirement is off).
 async function startAdEventIfRequired({ telegramId, action }) {
-  const { action_ads_enabled } = await getAllSettings();
-  if (!action_ads_enabled) return null;
+  const settings = await getAllSettings();
+  if (!settings.action_ads_enabled) return null;
+
+  // Bug fix: an abandoned/failed earlier attempt (user backed out, the
+  // ad SDK errored, a previous withConfirmationRetry timed out, etc.)
+  // leaves its nonce sitting in 'pending' — it doesn't expire for
+  // NONCE_TTL_MINUTES. Because the shared-block postback matches
+  // "oldest pending, any action" rather than a specific nonce, that
+  // leftover row jumps the queue: the NEXT ad watched (for a totally
+  // different attempt, possibly a different one of these four actions)
+  // gets its confirmation stolen by the stale row instead of the nonce
+  // the frontend is actually polling on — which is exactly the "Ad not
+  // yet confirmed" loop reported in production. Since a user can only
+  // be genuinely mid-flow on one of these four at a time, it's always
+  // correct to retire any older pending rows among them before minting
+  // a new one, so "oldest pending" is always the one just created.
+  if (settings.action_ads_network === 'adsgram' && SHARED_ADSGRAM_ACTIONS.has(action)) {
+    await client.execute({
+      sql: `DELETE FROM pending_ad_events
+            WHERE telegram_id = ? AND status = 'pending'
+              AND action IN ('spin', 'miner_start', 'miner_claim', 'referral_claim')`,
+      args: [telegramId],
+    });
+  }
+
   return startAdEvent({ telegramId, action });
 }
 
