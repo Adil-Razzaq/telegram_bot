@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { withConfirmationRetry } from '../monetag';
+import { showActionAd } from '../adNetwork';
 
 const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
 const MIN_WITHDRAWAL_POINTS = 500;
@@ -164,7 +166,9 @@ export default function Wallet({
     setError(null);
     setSuccessMsg(null);
     try {
-      const { withdrawal } = await api.requestWithdrawal(address, pointsNum);
+      const { nonce } = await api.prepareWithdrawal(address, pointsNum);
+      await showActionAd(nonce, config);
+      const { withdrawal } = await withConfirmationRetry(() => api.requestWithdrawal(address, pointsNum, nonce));
       onBalanceChange(mainBalance - pointsNum);
       setSuccessMsg(`Withdrawal of $${withdrawal.amount_usd.toFixed(2)} submitted — pending review.`);
       setPoints('');

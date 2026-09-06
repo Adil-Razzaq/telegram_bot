@@ -215,6 +215,19 @@ CREATE TABLE IF NOT EXISTS daily_ad_watch_state (
     PRIMARY KEY (telegram_id, network, watch_date)
 );
 
+-- ADDED: daily counter for the Adsgram "Task" banner (Tasks tab) — a
+-- SEPARATE table from daily_ad_watch_state above rather than a third
+-- 'network' value there, because that column's CHECK constraint is
+-- already baked into any already-deployed database and SQLite can't
+-- ALTER a CHECK constraint on an existing table. See
+-- services/taskBannerService.js.
+CREATE TABLE IF NOT EXISTS daily_task_banner_state (
+    telegram_id INTEGER NOT NULL,
+    watch_date TEXT NOT NULL, -- 'YYYY-MM-DD', UTC calendar day
+    watch_count INTEGER DEFAULT 0,
+    PRIMARY KEY (telegram_id, watch_date)
+);
+
 -- ADDED: 7-day login/watch-ad streak (Leaderboard & Streak tab). One
 -- row per user; streak_day is which day they last COMPLETED (1-7,
 -- wraps back to 1 after 7), last_claim_date is the UTC calendar day of

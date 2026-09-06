@@ -22,10 +22,12 @@ const SETTING_DEFS = {
   miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
   miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
   miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js
-  // How much watching a Boost ad compresses the REMAINING time in the
-  // current cycle (e.g. 3 = 3x faster to the same total reward). One
-  // use per cycle — see minerService.js's prepareBoost/activateBoost.
+  // Boost: watching an ad raises the accrual RATE by this multiplier
+  // for miner_boost_duration_minutes, then reverts — renewable with
+  // another ad once it expires. See minerService.js's
+  // prepareBoost/activateBoost/boostBonusPoints.
   miner_boost_multiplier: { type: 'number', default: 3, min: 1 },
+  miner_boost_duration_minutes: { type: 'number', default: 60, min: 1 },
   spin_entry_fee: { type: 'number', default: 100, min: 0 }, // charged per spin once free spins are used up
   spin_free_spins: { type: 'number', default: 3, min: 0 }, // first N spins for a new user skip the entry fee (still requires watching an ad)
   spin_payout_1: { type: 'number', default: 10, min: 0 },
@@ -79,6 +81,16 @@ const SETTING_DEFS = {
   adsgram_task_reward_points: { type: 'number', default: 50, min: 0 },
   watch_ad_daily_limit_monetag: { type: 'number', default: 3, min: 0 },
   watch_ad_daily_limit_adsgram: { type: 'number', default: 3, min: 0 },
+
+  // --- Adsgram "Task" format banner (Tasks tab) ---
+  // This is a DIFFERENT Adsgram block type than adsgram_block_id above
+  // (that one is Reward/Interstitial, shown via show()) — Task blocks
+  // are a passive web-component ad Adsgram rotates on its own schedule,
+  // firing a 'reward' event whenever it decides a view counted. See
+  // services/taskBannerService.js and components/AdsgramTaskBanner.jsx.
+  adsgram_task_banner_block_id: { type: 'string', default: '46328' },
+  adsgram_task_banner_reward_points: { type: 'number', default: 20, min: 0 },
+  adsgram_task_banner_daily_limit: { type: 'number', default: 5, min: 0 },
 
   // Optional platform fee on withdrawals — both 0 means off (the
   // default; payout equals face value exactly like before this

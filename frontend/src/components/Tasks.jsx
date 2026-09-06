@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { showRewardedAd, withConfirmationRetry } from '../monetag';
 import { showAdsgramRewardedAd } from '../adsgram';
+import AdsgramTaskBanner from './AdsgramTaskBanner';
 
 // Existing tasks store emoji icons (e.g. "🐦"); the new design uses
 // Material Symbols ligature names (e.g. "chat_bubble"). This renders
@@ -215,6 +216,8 @@ export default function Tasks({ onBalanceChange }) {
           </div>
         </div>
       )}
+
+      <AdsgramTaskBanner onBalanceChange={onBalanceChange} />
 
       {tasks.length > 0 && (
         <div className="watch-earn-header" style={{ marginBottom: 10 }}>

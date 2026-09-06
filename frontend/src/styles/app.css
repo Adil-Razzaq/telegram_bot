@@ -1548,3 +1548,14 @@ h3 {
   padding: 12px 16px 20px;
   -webkit-overflow-scrolling: touch;
 }
+
+/* --- Adsgram Task banner (AdsgramTaskBanner.jsx) --- */
+.task-banner-wrap {
+  margin-bottom: 16px;
+}
+.task-banner-widget {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+}

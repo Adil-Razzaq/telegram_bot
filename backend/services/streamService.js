@@ -14,6 +14,7 @@ const LABELS = {
   referral_grant: 'earned a referral bonus',
   miner_claim: 'claimed mining rewards',
   daily_watch_ad: 'watched an ad',
+  adsgram_task_banner: 'watched an ad',
   streak_claim: 'kept their streak going',
 };
 // Anything with a type not in LABELS (ad_task:<id>, admin_adjustment,

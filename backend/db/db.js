@@ -34,7 +34,17 @@ const COLUMNS_TO_ENSURE = [
   // services/minerService.js's prepareBoost/activateBoost. Constant
   // default (0) is fine for ALTER ADD COLUMN, unlike cycles_reset_date
   // above.
+  // Deprecated — replaced by the two columns below (hourly-renewable
+  // boost windows instead of a once-per-cycle permanent flag). Left in
+  // place rather than dropped to avoid an ALTER TABLE DROP COLUMN
+  // migration; simply unused by minerService.js now.
   { table: 'miner_state', column: 'boost_active', ddl: 'INTEGER DEFAULT 0' },
+  // When the CURRENTLY active boost window ends (NULL = no active
+  // window). Constant NULL default is fine for ALTER ADD COLUMN.
+  { table: 'miner_state', column: 'boost_expires_at', ddl: 'TEXT' },
+  // Bonus points already earned from PAST, now-expired boost windows
+  // this cycle — see boostBonusPoints in minerService.js.
+  { table: 'miner_state', column: 'boost_bonus_banked', ddl: 'REAL DEFAULT 0' },
   { table: 'pending_ad_events', column: 'estimated_price', ddl: 'REAL DEFAULT 0' },
   // Distinguishes which network sent this row now that both Monetag and
   // Adsgram write into the same log table (see routes/bot.js). Constant

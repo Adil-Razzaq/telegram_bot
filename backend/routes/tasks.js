@@ -2,6 +2,11 @@ const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
 const { listTasksForUser, claimTask, prepareAdTask, claimAdTask } = require('../services/taskService');
 const { getStatus: getAdWatchStatus, prepareWatch, claimWatch } = require('../services/adWatchService');
+const {
+  getStatus: getTaskBannerStatus,
+  prepareReward: prepareTaskBannerReward,
+  claimReward: claimTaskBannerReward,
+} = require('../services/taskBannerService');
 
 const router = express.Router();
 
@@ -77,6 +82,38 @@ router.post('/ad-watch/claim', telegramAuth, async (req, res) => {
   }
   try {
     const result = await claimWatch({ telegramId: req.telegramUser.id, network, nonce });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Adsgram "Task" format banner (Tasks tab) — see
+// services/taskBannerService.js for why this flow looks different from
+// every other ad-gated action here (passive widget, not a button click).
+
+router.get('/task-banner/status', telegramAuth, async (req, res) => {
+  try {
+    const status = await getTaskBannerStatus({ telegramId: req.telegramUser.id });
+    res.json({ ok: true, status });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/task-banner/prepare', telegramAuth, async (req, res) => {
+  try {
+    const nonce = await prepareTaskBannerReward({ telegramId: req.telegramUser.id });
+    res.json({ ok: true, nonce });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/task-banner/claim', telegramAuth, async (req, res) => {
+  const { nonce } = req.body;
+  try {
+    const result = await claimTaskBannerReward({ telegramId: req.telegramUser.id, nonce });
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });

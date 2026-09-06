@@ -3,6 +3,7 @@ const { client } = require('../db/db');
 const { sendTelegramMessage } = require('../utils/telegram');
 const { getSetting } = require('../utils/settings');
 const { getFlag } = require('../utils/featureFlags');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 
 // TON addresses, not BEP-20 — matches the TON Connect / Tonkeeper wallet
 // integration (see walletService.js). Accepts both the common
@@ -11,8 +12,10 @@ const { getFlag } = require('../utils/featureFlags');
 const TON_ADDRESS_REGEX = /^((EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}|-?[01]:[a-fA-F0-9]{64})$/;
 const MIN_WITHDRAWAL_POINTS = 500; // = $0.05 at the default 10,000 pts = $1 rate
 
-async function requestWithdrawal({ telegramId, address, points }) {
-  const withdrawalsFlag = await getFlag('withdrawals');
+// Shared validation between prepare and the actual request — re-run in
+// full at request time too (not just here), since balance/flag/address
+// could all still change in the time it takes to watch an ad.
+function validateWithdrawalInputs({ address, points, withdrawalsFlag }) {
   if (!withdrawalsFlag.enabled) {
     const err = new Error(withdrawalsFlag.message || 'Withdrawals are temporarily unavailable.');
     err.statusCode = 403;
@@ -28,6 +31,39 @@ async function requestWithdrawal({ telegramId, address, points }) {
     err.statusCode = 400;
     throw err;
   }
+}
+
+// Step 1: validate the request looks legitimate (flag on, address format
+// ok, amount format ok, balance sufficient) and get an ad nonce — same
+// two-step pattern as every other ad-gated action (spin, miner, etc.).
+async function prepareWithdrawal({ telegramId, address, points }) {
+  const withdrawalsFlag = await getFlag('withdrawals');
+  validateWithdrawalInputs({ address, points, withdrawalsFlag });
+
+  const userRes = await client.execute({
+    sql: 'SELECT main_balance FROM users WHERE telegram_id = ?',
+    args: [telegramId],
+  });
+  const user = userRes.rows[0];
+  if (!user) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (user.main_balance < points) {
+    const err = new Error('Insufficient balance');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return startAdEventIfRequired({ telegramId, action: 'withdrawal_request' });
+}
+
+async function requestWithdrawal({ telegramId, address, points, nonce }) {
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'withdrawal_request' });
+
+  const withdrawalsFlag = await getFlag('withdrawals');
+  validateWithdrawalInputs({ address, points, withdrawalsFlag });
 
   const tx = await client.transaction('write');
   try {
@@ -343,6 +379,7 @@ async function getRecentPayouts({ limit = 20 } = {}) {
 }
 
 module.exports = {
+  prepareWithdrawal,
   requestWithdrawal,
   listPendingWithdrawals,
   listWithdrawalsForUser,

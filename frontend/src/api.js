@@ -51,8 +51,10 @@ export const api = {
     apiCall('/referral/register', { method: 'POST', body: { referrer_id: referrerId } }),
   prepareClaim: () => apiCall('/referral/prepare-claim', { method: 'POST' }),
   claimReferral: (nonce) => apiCall('/referral/claim', { method: 'POST', body: { nonce } }),
-  requestWithdrawal: (address, points) =>
-    apiCall('/withdrawal/request', { method: 'POST', body: { address, points } }),
+  prepareWithdrawal: (address, points) =>
+    apiCall('/withdrawal/prepare', { method: 'POST', body: { address, points } }),
+  requestWithdrawal: (address, points, nonce) =>
+    apiCall('/withdrawal/request', { method: 'POST', body: { address, points, nonce } }),
   withdrawalHistory: () => apiCall('/withdrawal/history'),
   recentPayouts: (limit) => apiCall(`/withdrawal/recent-payouts${limit ? `?limit=${limit}` : ''}`),
   adWatchStatus: () => apiCall('/tasks/ad-watch/status'),
@@ -62,4 +64,7 @@ export const api = {
   prepareStreakClaim: () => apiCall('/streak/prepare-claim', { method: 'POST' }),
   claimStreak: (nonce) => apiCall('/streak/claim', { method: 'POST', body: { nonce } }),
   leaderboardTop: () => apiCall('/leaderboard/top'),
+  taskBannerStatus: () => apiCall('/tasks/task-banner/status'),
+  prepareTaskBanner: () => apiCall('/tasks/task-banner/prepare', { method: 'POST' }),
+  claimTaskBanner: (nonce) => apiCall('/tasks/task-banner/claim', { method: 'POST', body: { nonce } }),
 };

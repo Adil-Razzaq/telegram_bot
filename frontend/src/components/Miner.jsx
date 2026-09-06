@@ -11,6 +11,17 @@ function formatDuration(totalSeconds) {
   return { h: String(h).padStart(2, '0'), m: String(m).padStart(2, '0'), s: String(s).padStart(2, '0') };
 }
 
+// Boost windows are admin-configurable in minutes (default 60) — this
+// covers both a short window (mm:ss) and a longer one (hh:mm:ss) rather
+// than assuming it's always under an hour.
+function formatBoostCountdown(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.floor(totalSeconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 // The single source of truth for the ticking display: a stable anchor
 // (cycle_started_at, which only changes on a fresh Start) plus a rate —
 // never re-derived from a periodically-floored snapshot (accrued_now),
@@ -105,6 +116,17 @@ export default function Miner({
   // Start/Boost legitimately changes it) — so there's nothing to snap
   // back to, the number only ever climbs.
   const syncRef = useRef(computeSyncFromStatus(cached?.status));
+  // Same anchor-based approach for the boost renewal countdown —
+  // expiresAtMs is fixed at the moment we learn about it (poll or
+  // Boost action), then boostSecondsLeft is derived from real elapsed
+  // time each tick, same as everything else here.
+  const boostSyncRef = useRef(null);
+  const [boostSecondsLeft, setBoostSecondsLeft] = useState(0);
+
+  function syncBoostTimer(s) {
+    boostSyncRef.current = s.boost_active ? { expiresAtMs: Date.now() + s.boost_seconds_remaining * 1000 } : null;
+    setBoostSecondsLeft(s.boost_active ? s.boost_seconds_remaining : 0);
+  }
 
   async function refreshStatus() {
     try {
@@ -113,6 +135,7 @@ export default function Miner({
       setSecondsLeft(s.seconds_remaining_in_cycle);
       syncRef.current = computeSyncFromStatus(s);
       setLiveAccrued(readSync(syncRef.current));
+      syncBoostTimer(s);
       writeCachedStatus({ status: s, cachedAt: Date.now() });
       setError(null);
     } catch (e) {
@@ -127,13 +150,27 @@ export default function Miner({
     return () => clearInterval(pollRef.current);
   }, []);
 
+  // Anchor for the cycle countdown — cycle_ends_at is stable between
+  // polls (only a fresh Start changes it), so secondsLeft is DERIVED
+  // from it each tick rather than decremented by a fixed amount per
+  // tick. The previous version decremented by a full second on every
+  // 150ms firing — counting down ~6.7x too fast until the next 15s poll
+  // silently corrected it. Deriving from the real timestamp instead
+  // means there's nothing to correct.
+  const cycleEndsAtMs = status?.status === 'running' ? new Date(status.cycle_ends_at + 'Z').getTime() : null;
+
   useEffect(() => {
     tickRef.current = setInterval(() => {
-      setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
+      if (cycleEndsAtMs) {
+        setSecondsLeft(Math.max(0, Math.ceil((cycleEndsAtMs - Date.now()) / 1000)));
+      }
       setLiveAccrued(readSync(syncRef.current));
+      if (boostSyncRef.current) {
+        setBoostSecondsLeft(Math.max(0, Math.ceil((boostSyncRef.current.expiresAtMs - Date.now()) / 1000)));
+      }
     }, 150); // smooth-ish ticking without being wasteful
     return () => clearInterval(tickRef.current);
-  }, []);
+  }, [cycleEndsAtMs]);
 
   function showToast(points) {
     setToast(points);
@@ -154,6 +191,7 @@ export default function Miner({
       setSecondsLeft(result.seconds_remaining_in_cycle);
       syncRef.current = computeSyncFromStatus(result);
       setLiveAccrued(readSync(syncRef.current));
+      syncBoostTimer(result);
       writeCachedStatus({ status: result, cachedAt: Date.now() });
     } catch (e) {
       setError(e.message);
@@ -184,11 +222,11 @@ export default function Miner({
     }
   }
 
-  // Once per cycle: watch an ad to MULTIPLY this cycle's point target by
-  // status.boost_multiplier (server-controlled, e.g. 3x — 25 becomes 75,
-  // not "reached faster"). Timing is untouched. Server re-derives
-  // current_cycle_points/rate_per_second/accrued_now itself; applying
-  // the response directly here picks up the bigger numbers immediately.
+  // Watch an ad to raise the accrual RATE by status.boost_multiplier
+  // for status.boost_duration_minutes (e.g. 3x for 60 minutes), then it
+  // reverts — status.can_boost flips back to true once the window
+  // expires, so another ad "renews" it. Timing of the cycle itself is
+  // never touched, only how fast points accrue during the window.
   async function handleBoost() {
     if (boosting) return;
     setBoosting(true);
@@ -201,6 +239,7 @@ export default function Miner({
       setSecondsLeft(result.seconds_remaining_in_cycle);
       syncRef.current = computeSyncFromStatus(result);
       setLiveAccrued(readSync(syncRef.current));
+      syncBoostTimer(result);
       writeCachedStatus({ status: result, cachedAt: Date.now() });
       playNotificationSound();
     } catch (e) {
@@ -282,7 +321,9 @@ export default function Miner({
         <div className="miner-live-rate num">+{liveAccrued.toFixed(4)}</div>
       )}
       {status.boost_active && (
-        <div className="miner-boost-badge">⚡ {status.boost_multiplier}x boost active</div>
+        <div className="miner-boost-badge">
+          ⚡ {status.boost_multiplier}x active — renews in {formatBoostCountdown(boostSecondsLeft)}
+        </div>
       )}
 
       <div className={`miner-coin-wrap${cycleComplete ? ' miner-coin-complete' : ''}`}>
@@ -348,7 +389,7 @@ export default function Miner({
 
       {status.can_boost && (
         <button className="miner-boost-button" onClick={handleBoost} disabled={boosting}>
-          {boosting ? 'Loading…' : `⚡ Watch ad for ${status.boost_multiplier}x rewards`}
+          {boosting ? 'Loading…' : `Boost to ${status.boost_multiplier}x Power`}
         </button>
       )}
       {/* Separate from Boost above, and only ever shown once the cycle
