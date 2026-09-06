@@ -86,15 +86,22 @@ export default function AdsgramTaskBanner({ onBalanceChange }) {
 
   if (!status || !status.block_id || !status.can_watch) return null;
 
+  // Adsgram requires this exact format: 'task-<decimal number>'. Normalize
+  // here rather than trusting the admin panel value verbatim — an admin
+  // might reasonably type just the number (e.g. '46328', as shown on
+  // Adsgram's own dashboard) without knowing the widget needs the
+  // 'task-' prefix added.
+  const formattedBlockId = status.block_id.startsWith('task-') ? status.block_id : `task-${status.block_id}`;
+
   return (
     <div className="task-banner-wrap">
       {/* key forces a clean remount if the admin changes the block ID
           mid-session, rather than the custom element trying to react
           to an attribute change on its own. */}
       <adsgram-task
-        key={status.block_id}
+        key={formattedBlockId}
         ref={containerRef}
-        data-block-id={status.block_id}
+        data-block-id={formattedBlockId}
         class="task-banner-widget"
       />
     </div>

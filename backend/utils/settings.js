@@ -88,7 +88,7 @@ const SETTING_DEFS = {
   // are a passive web-component ad Adsgram rotates on its own schedule,
   // firing a 'reward' event whenever it decides a view counted. See
   // services/taskBannerService.js and components/AdsgramTaskBanner.jsx.
-  adsgram_task_banner_block_id: { type: 'string', default: '46328' },
+  adsgram_task_banner_block_id: { type: 'string', default: 'task-46328' },
   adsgram_task_banner_reward_points: { type: 'number', default: 20, min: 0 },
   adsgram_task_banner_daily_limit: { type: 'number', default: 5, min: 0 },
 
