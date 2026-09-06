@@ -332,7 +332,7 @@ export default function Miner({
       )}
       {status.boost_active && (
         <div className="miner-boost-badge">
-          ⚡ {status.boost_multiplier}x active — renews in {formatBoostCountdown(boostSecondsLeft)}
+          ⚡ {status.boost_multiplier}x Active — Renews in {formatBoostCountdown(boostSecondsLeft)}
         </div>
       )}
 
@@ -376,13 +376,13 @@ export default function Miner({
             })()}
           </div>
           <p className="miner-copy">
-            left in this cycle — the Claim button unlocks once this hits zero.
+            Time Until Claim
           </p>
         </>
       )}
       {cycleComplete && (
         <p className="miner-copy miner-copy-complete">
-          Cycle complete — {liveAccrued.toFixed(4)} ADLX ready. Tap below to claim it.
+          Cycle complete — {liveAccrued.toFixed(4)} ADLX Ready. Tap below to claim it.
         </p>
       )}
       {canRestart && (
