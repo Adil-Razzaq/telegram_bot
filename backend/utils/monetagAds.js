@@ -154,16 +154,27 @@ async function consumeAdEvent({ nonce, telegramId, action }) {
 // action" is the correct behavior, and startAdEvent above keeps that
 // queue clean of stale rows so "oldest" always means the current attempt.
 async function confirmOldestPendingByUser({ telegramId, action, estimatedPrice = 0 }) {
+  // When no action is given (the shared-block Reward Url used by spin/
+  // miner/referral/withdrawal/streak/daily_watch:adsgram), the task
+  // banner's queue must be excluded explicitly. The task banner has its
+  // OWN separate Adsgram block and its own action-scoped Reward Url
+  // (confirmed via the `action` branch below instead) — if a banner
+  // nonce is armed (which happens automatically on Tasks-page mount)
+  // and happens to be older than the nonce this shared-block ad watch
+  // just started, "oldest pending for this user" would otherwise match
+  // the banner's row instead of the one actually being waited on, and
+  // the real nonce would never confirm ("Ad not yet confirmed" forever)
+  // even though a postback genuinely arrived and matched *something*.
   const sql = action
     ? `SELECT nonce FROM pending_ad_events
        WHERE telegram_id = ? AND action = ? AND status = 'pending'
          AND created_at >= datetime('now', '-${NONCE_TTL_MINUTES} minutes')
        ORDER BY created_at ASC LIMIT 1`
     : `SELECT nonce FROM pending_ad_events
-       WHERE telegram_id = ? AND status = 'pending'
+       WHERE telegram_id = ? AND action != ? AND status = 'pending'
          AND created_at >= datetime('now', '-${NONCE_TTL_MINUTES} minutes')
        ORDER BY created_at ASC LIMIT 1`;
-  const args = action ? [telegramId, action] : [telegramId];
+  const args = action ? [telegramId, action] : [telegramId, TASK_BANNER_ACTION];
   const res = await client.execute({ sql, args });
   const row = res.rows[0];
   if (!row) return false;
