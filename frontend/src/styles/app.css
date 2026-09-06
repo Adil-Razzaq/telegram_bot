@@ -1549,13 +1549,25 @@ h3 {
   -webkit-overflow-scrolling: touch;
 }
 
-/* --- Adsgram Task banner (AdsgramTaskBanner.jsx) --- */
-.task-banner-wrap {
-  margin-bottom: 16px;
+/* --- Adsgram Task banner (AdsgramTaskBanner.jsx) ---
+   Wrapped in the same .task-card shell as the other Watch & Earn cards
+   (icon + title + reward pill), but the actual ad creative renders
+   inside .task-banner-widget as an extra row below that header — its
+   content/layout is Adsgram's own (whatever sponsor it's rotating),
+   not something this app controls, so it gets a top divider to read as
+   "the ad that earns this card's reward" rather than blending into the
+   title row above it. */
+.task-card-banner {
+  align-items: stretch;
+}
+.task-card-banner .task-info {
+  gap: 8px;
 }
 .task-banner-widget {
   display: block;
   width: 100%;
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
 }

@@ -94,16 +94,30 @@ export default function AdsgramTaskBanner({ onBalanceChange }) {
   const formattedBlockId = status.block_id.startsWith('task-') ? status.block_id : `task-${status.block_id}`;
 
   return (
-    <div className="task-banner-wrap">
-      {/* key forces a clean remount if the admin changes the block ID
-          mid-session, rather than the custom element trying to react
-          to an attribute change on its own. */}
-      <adsgram-task
-        key={formattedBlockId}
-        ref={containerRef}
-        data-block-id={formattedBlockId}
-        class="task-banner-widget"
-      />
+    <div className="task-card task-card-banner">
+      <span className="task-icon watch-earn-icon-adsgram">
+        <span className="material-symbols-outlined">smart_display</span>
+      </span>
+      <div className="task-info">
+        <span className="task-title">Bonus Ads</span>
+        <span className="task-reward">
+          {status.watched_today}/{status.daily_limit}
+          <span className="watch-earn-reward-pill">+{status.reward_points}</span>
+        </span>
+        {/* key forces a clean remount if the admin changes the block ID
+            mid-session, rather than the custom element trying to react
+            to an attribute change on its own. The actual ad creative
+            inside this element is rendered by Adsgram itself (whatever
+            sponsor it's currently rotating) — this card just gives it
+            the same name/points/count framing as every other reward
+            card above, instead of the bare unstyled ad it was before. */}
+        <adsgram-task
+          key={formattedBlockId}
+          ref={containerRef}
+          data-block-id={formattedBlockId}
+          class="task-banner-widget"
+        />
+      </div>
     </div>
   );
 }
