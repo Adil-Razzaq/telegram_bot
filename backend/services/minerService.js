@@ -205,12 +205,13 @@ async function prepareStart({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: 'miner_start' });
+  // Starting a mining cycle never requires an ad, regardless of the
+  // global action_ads_enabled switch (which still gates spin/referral/
+  // tasks/boost as before) — no nonce needed here.
+  return null;
 }
 
 async function startCycle({ telegramId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_start' });
-
   const row = await getRow(telegramId);
   const settings = await getAllSettings();
   if (row.status !== 'idle') {
@@ -255,12 +256,12 @@ async function prepareClaim({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: 'miner_claim' });
+  // Claiming never requires an ad either — same reasoning as
+  // prepareStart above.
+  return null;
 }
 
 async function claim({ telegramId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim' });
-
   const settings = await getAllSettings();
   const tx = await client.transaction('write');
   try {

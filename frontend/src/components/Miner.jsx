@@ -387,7 +387,7 @@ export default function Miner({
       )}
       {canRestart && (
         <p className="miner-copy">
-          Watch a short ad to start a {status.cycle_hours}h cycle worth ~{status.next_cycle_points} ADLX.
+          Start a {status.cycle_hours}h cycle worth ~{status.next_cycle_points} ADLX.
           {' '}({status.cycles_remaining_today} of {status.cycles_per_day} cycles left today)
         </p>
       )}
@@ -409,12 +409,12 @@ export default function Miner({
           activelyRunning. */}
       {cycleComplete && (
         <button className="miner-claim-button" onClick={handleClaim} disabled={claiming}>
-          {claiming ? 'Claiming…' : 'Watch ad & Claim'}
+          {claiming ? 'Claiming…' : 'Claim'}
         </button>
       )}
       {canRestart && (
         <button className="miner-claim-button" onClick={handleStart} disabled={starting}>
-          {starting ? 'Loading…' : status.cycles_completed_today > 0 ? 'Restart Cycle' : 'Start Mining'}
+          {starting ? 'Loading…' : 'Start Mining'}
         </button>
       )}
 
