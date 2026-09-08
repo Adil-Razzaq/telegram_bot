@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const { migrate } = require('./db/db');
+const { reconcileStuckReferrals } = require('./services/referralService');
 const spinRoutes = require('./routes/spin');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
@@ -93,6 +94,15 @@ const PORT = process.env.PORT || 4000;
 migrate()
   .then(() => {
     app.listen(PORT, () => console.log(`API listening on :${PORT}`));
+
+    // Catches any referral stuck from before this fix existed (or from
+    // before gating was ever turned on) — see reconcileStuckReferrals
+    // in referralService.js for why this can't just wait for the
+    // referred user's next mining cycle. Runs once immediately, then
+    // every 10 minutes, so a stuck referral resolves itself within
+    // minutes with zero manual admin action.
+    reconcileStuckReferrals();
+    setInterval(reconcileStuckReferrals, 10 * 60 * 1000);
   })
   .catch((err) => {
     console.error('Failed to run database migration on startup:', err);

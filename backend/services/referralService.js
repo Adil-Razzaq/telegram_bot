@@ -208,6 +208,32 @@ async function maybeQualifyReferral(referredTelegramId) {
   }
 }
 
+// Self-healing sweep for referrals that already meet qualification but
+// were never actually re-checked — e.g. a referred user who finished
+// enough cycles BEFORE the immediate at-link check (above, in
+// grantReferral) ever existed or ran for them, or before gating was
+// turned on at all. Without this, such a referral sits stuck forever
+// unless that specific referred user happens to mine one more cycle,
+// which is exactly the "0/2 / 1/2 never flips" symptom. Called once at
+// server startup and then on a fixed interval (see server.js) so it
+// resolves itself automatically, with no admin action and no
+// dependency on future activity from the referred user. Fully
+// idempotent: maybeQualifyReferral does its own re-check-and-lock, so
+// sweeping an already-qualified user (the overwhelming majority of
+// rows here, over time) is always a cheap, safe no-op.
+async function reconcileStuckReferrals() {
+  try {
+    const res = await client.execute(
+      'SELECT telegram_id FROM users WHERE referred_by IS NOT NULL AND referral_qualified = 0'
+    );
+    for (const row of res.rows) {
+      await maybeQualifyReferral(row.telegram_id);
+    }
+  } catch (err) {
+    console.error('reconcileStuckReferrals failed:', err.message);
+  }
+}
+
 async function prepareClaim({ telegramId }) {
   return startAdEventIfRequired({ telegramId, action: 'referral_claim' });
 }
@@ -277,6 +303,7 @@ async function claimReferral({ telegramId, nonce }) {
 module.exports = {
   grantReferral,
   maybeQualifyReferral,
+  reconcileStuckReferrals,
   prepareClaim,
   claimReferral,
   DAILY_CLAIM_CAP,
