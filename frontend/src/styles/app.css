@@ -355,6 +355,23 @@ h3 {
   white-space: nowrap;
 }
 
+/* Green counterpart to .pending-badge — a referral that has already
+   been credited (referral_qualified = 1 for good, never re-triggered).
+   Only shown when gating is actually on; see Friends.jsx. */
+.active-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(0, 227, 139, 0.3);
+  padding: 4px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* ---------- Spin wheel ---------- */
 .spin-wheel-container {
   display: flex;

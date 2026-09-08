@@ -221,7 +221,17 @@ export default function Friends({ telegramId, onBalanceChange }) {
                     {u.username ? `@${u.username}` : `User ${u.telegram_id}`}
                   </span>
                   {isQualified ? (
-                    <span className="friends-invited-time">{timeAgo(u.created_at)}</span>
+                    requiredCycles > 0 ? (
+                      // Gating is on: make "already earned" an explicit,
+                      // permanent state — not just a plain timestamp
+                      // that looks identical to how every referral
+                      // looked before this feature existed.
+                      <span className="active-badge" title={timeAgo(u.created_at)}>
+                        Active
+                      </span>
+                    ) : (
+                      <span className="friends-invited-time">{timeAgo(u.created_at)}</span>
+                    )
                   ) : (
                     <span
                       className="pending-badge"

@@ -97,6 +97,25 @@ async function grantReferral({ referrerId, referredTelegramId }) {
       args: [referrerId],
     });
     await tx.commit();
+
+    // ADDED: catches the case where the referred user already had
+    // enough mining cycles (or already met the channel-join rule)
+    // BEFORE this link was even created — e.g. they mined first, then
+    // opened the referral link later. Without this, maybeQualifyReferral
+    // only ever runs from a FUTURE cycle claim (see minerService.js), so
+    // that user would sit "stuck" needing one extra, unnecessary cycle
+    // before their referrer ever gets paid. Safe to fire immediately:
+    // maybeQualifyReferral re-checks everything itself and is a no-op
+    // if conditions genuinely aren't met yet. Non-blocking (same
+    // fire-and-forget pattern as minerService.js's claim()) so a slow
+    // channel-membership check can never delay the /register or /start
+    // response.
+    if (gatingActive) {
+      maybeQualifyReferral(referredTelegramId).catch((e) =>
+        console.error('Referral qualification check failed after linking:', e.message)
+      );
+    }
+
     return updatedRes.rows[0];
   } catch (err) {
     await tx.rollback().catch(() => {});
