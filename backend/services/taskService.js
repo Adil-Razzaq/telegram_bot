@@ -53,12 +53,28 @@ async function isChannelMember(channelId, telegramId) {
  * fails CLOSED on an actual verification error, same as isChannelMember
  * itself: an unclear result never counts as "joined".
  */
+// ADDED: normalizes whatever an admin types into the official_channels
+// setting into the one format Telegram's getChatMember actually
+// accepts. Telegram requires a leading "@" for username-style lookups
+// (e.g. "@ADLX_AIRDROP") — a bare "ADLX_AIRDROP" resolves to nothing
+// and Telegram replies "chat not found", which looks identical to "the
+// bot isn't an admin" even when it genuinely is (this is exactly what
+// happened with ADLX_AIRDROP / adlxpay). Numeric IDs (always negative,
+// e.g. "-1001234567890" for a private channel/supergroup) are left
+// completely untouched — only bare usernames get "@" added.
+function normalizeChannelId(raw) {
+  let c = raw.trim().replace(/^(?:https?:\/\/)?t\.me\//i, '');
+  if (c.startsWith('-') || c.startsWith('@')) return c;
+  return `@${c}`;
+}
+
 async function checkOfficialChannelsMembership(telegramId) {
   const raw = await getSetting('official_channels');
   const channels = String(raw || '')
     .split(',')
     .map((c) => c.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(normalizeChannelId);
 
   if (channels.length === 0) {
     return { required: [], joined: true, missing: [] };
