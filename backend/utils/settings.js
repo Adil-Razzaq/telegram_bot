@@ -72,7 +72,17 @@ const SETTING_DEFS = {
   // Zone/Block IDs — editable here instead of hardcoded in frontend env
   // vars, so they can change without a frontend redeploy.
   monetag_zone_id: { type: 'string', default: '11654422' },
+  // Adsgram Rewarded block — used for spin/miner/referral/streak reward
+  // actions AND the daily_watch:adsgram task (see monetagAds.js/bot.js
+  // notes on why those share one block + one Reward Url).
   adsgram_block_id: { type: 'string', default: '' },
+  // Adsgram Interstitial block — a DIFFERENT block type/ID in Adsgram's
+  // dashboard than adsgram_block_id above. Rewarded and Interstitial
+  // are separate ad units on Adsgram's side even though our SDK wrapper
+  // calls the same init()/show() shape for both — see adsgram.js. Used
+  // only by the passive/auto ad in AutoAds.jsx; falls back to
+  // adsgram_block_id if left blank so existing setups keep working.
+  adsgram_interstitial_block_id: { type: 'string', default: '' },
 
   // Task-bar watch-ad rewards & limits — one Monetag task (revenue-
   // based, see taskService.js) and one Adsgram task (fixed points, since

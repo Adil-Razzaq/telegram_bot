@@ -11,6 +11,10 @@ import { showAdsgramInterstitial } from '../adsgram';
  * ads always need it too, after initMonetag() has already been kicked
  * off there).
  *
+ * Adsgram block id: uses adsgram_interstitial_block_id (a separate
+ * block from the Rewarded one used for actions), falling back to
+ * adsgram_block_id if that's not set.
+ *
  * Monetag: Monetag's own SDK handles ALL scheduling internally
  * (first-delay, interval, frequency/capping, AND re-showing on tab
  * switches via everyPage:true) — enableInAppInterstitial is called once
@@ -54,7 +58,10 @@ export default function AutoAds({ config }) {
     }
 
     // network === 'adsgram'
-    const blockId = config.adsgram_block_id;
+    // Interstitial is a different Adsgram block than the Rewarded one
+    // used for actions — falls back to adsgram_block_id if the admin
+    // hasn't set a dedicated interstitial block yet.
+    const blockId = config.adsgram_interstitial_block_id || config.adsgram_block_id;
     if (!blockId) return undefined;
 
     const cappingMs = config.auto_ad_capping_hours * 60 * 60 * 1000;
@@ -96,6 +103,7 @@ export default function AutoAds({ config }) {
     config?.auto_ad_first_enabled,
     config?.auto_ad_network,
     config?.adsgram_block_id,
+    config?.adsgram_interstitial_block_id,
     config?.auto_ad_first_delay_seconds,
     config?.auto_ad_interval_seconds,
     config?.auto_ad_frequency,
