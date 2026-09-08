@@ -1,6 +1,6 @@
 const { client } = require('../db/db');
 const { getAllSettings } = require('../utils/settings');
-const { startAdEvent, consumeAdEvent } = require('../utils/monetagAds');
+const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/monetagAds');
 
 /**
  * 7-day streak: watch an ad once per calendar day (UTC) to advance to
@@ -81,11 +81,13 @@ async function prepareClaim({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEvent({ telegramId, action: 'streak_claim' });
+  // Own independent toggle (streak_claim_ads_enabled) — defaults to on,
+  // switchable in the admin panel separately from every other button.
+  return startAdEventIfRequired({ telegramId, action: 'streak_claim', settingKey: 'streak_claim_ads_enabled' });
 }
 
 async function claim({ telegramId, nonce }) {
-  const event = await consumeAdEvent({ nonce, telegramId, action: 'streak_claim' });
+  const event = await consumeAdEventIfRequired({ nonce, telegramId, action: 'streak_claim', settingKey: 'streak_claim_ads_enabled' });
   void event; // no revenue-share here — streak uses fixed per-day settings regardless of network
 
   const settings = await getAllSettings();

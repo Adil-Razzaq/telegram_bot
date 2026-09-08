@@ -205,10 +205,10 @@ async function prepareStart({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  // Starting a mining cycle never requires an ad, regardless of the
-  // global action_ads_enabled switch (which still gates spin/referral/
-  // tasks/boost as before) — no nonce needed here.
-  return null;
+  // Starting a mining cycle has its OWN independent toggle
+  // (miner_start_ads_enabled) — defaults to on, switchable in the admin
+  // panel separately from every other button's ad requirement.
+  return startAdEventIfRequired({ telegramId, action: 'miner_start', settingKey: 'miner_start_ads_enabled' });
 }
 
 async function startCycle({ telegramId, nonce }) {
@@ -224,6 +224,9 @@ async function startCycle({ telegramId, nonce }) {
     err.statusCode = 400;
     throw err;
   }
+
+  // See prepareStart's comment above — its own independent toggle.
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_start', settingKey: 'miner_start_ads_enabled' });
 
   await client.execute({
     sql: `UPDATE miner_state
@@ -256,9 +259,9 @@ async function prepareClaim({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  // Claiming never requires an ad either — same reasoning as
-  // prepareStart above.
-  return null;
+  // Claiming has its OWN independent toggle (miner_claim_ads_enabled)
+  // too — same pattern as prepareStart above.
+  return startAdEventIfRequired({ telegramId, action: 'miner_claim', settingKey: 'miner_claim_ads_enabled' });
 }
 
 async function claim({ telegramId, nonce }) {
@@ -287,6 +290,12 @@ async function claim({ telegramId, nonce }) {
       err.statusCode = 400;
       throw err;
     }
+
+    // See prepareClaim's comment above — its own independent toggle.
+    // Consumed inside the same transaction as the payout, same
+    // placement pattern as spinService.js's consumeAdEventIfRequired
+    // call.
+    await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim', settingKey: 'miner_claim_ads_enabled' });
 
     // Recomputed at claim time, inside the transaction — not trusted
     // from anything the client sent, so there's no way to claim more
@@ -357,11 +366,11 @@ async function prepareBoost({ telegramId }) {
     err.statusCode = 400;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: 'miner_boost' });
+  return startAdEventIfRequired({ telegramId, action: 'miner_boost', settingKey: 'miner_boost_ads_enabled' });
 }
 
 async function activateBoost({ telegramId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_boost' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_boost', settingKey: 'miner_boost_ads_enabled' });
 
   const settings = await getAllSettings();
   const tx = await client.transaction('write');

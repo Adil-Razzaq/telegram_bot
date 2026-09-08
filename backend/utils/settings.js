@@ -39,11 +39,22 @@ const SETTING_DEFS = {
 
   // --- Ad controls (added for admin-managed ads) ---
 
-  // Master switch for every reward-gated ad (spin, miner start, miner
-  // claim, referral claim, task claim, watch-ad tasks). When off, those
-  // actions proceed WITHOUT requiring an ad — see each service's use of
-  // this flag before calling startAdEvent/consumeAdEvent.
+  // Each reward-gated button now has its OWN independent on/off toggle
+  // (below) instead of sharing one switch — every one of these defaults
+  // to true, matching the app's previous "ad always required" behavior,
+  // but can now be flipped individually per action. action_ads_enabled
+  // remains as a fallback used only by admin-created generic watch_ad
+  // tasks (see taskService.js) — those aren't one of "the buttons"
+  // since each such task already has its own active/inactive control at
+  // the task-row level.
   action_ads_enabled: { type: 'boolean', default: true },
+  spin_ads_enabled: { type: 'boolean', default: true },
+  miner_start_ads_enabled: { type: 'boolean', default: true },
+  miner_claim_ads_enabled: { type: 'boolean', default: true },
+  miner_boost_ads_enabled: { type: 'boolean', default: true },
+  referral_claim_ads_enabled: { type: 'boolean', default: true },
+  streak_claim_ads_enabled: { type: 'boolean', default: true },
+  withdrawal_ads_enabled: { type: 'boolean', default: true },
   // Which network serves those SAME reward-gated actions (spin, miner
   // start/claim, referral claim) — switchable independent of the
   // passive auto-ad's network below. Does NOT cover the two dedicated
@@ -54,12 +65,14 @@ const SETTING_DEFS = {
 
   // Passive auto-ad (Monetag In-App Interstitial or Adsgram shown on a
   // timer) — see frontend/src/components/AutoAds.jsx.
+  // NOTE these two toggles are fully INDEPENDENT of each other (not one
+  // master + one sub-switch) — either can be on with the other off:
+  //   - auto_ad_enabled: the REPEAT ads only (interval + tab-switch).
+  //   - auto_ad_first_enabled: the STARTUP ad only (fires
+  //     auto_ad_first_delay_seconds after open). This one keeps working
+  //     even if auto_ad_enabled above is OFF — e.g. "show one ad on
+  //     open, no recurring passive ads" is a supported combination.
   auto_ad_enabled: { type: 'boolean', default: true },
-  // Separate from auto_ad_enabled above: that's the overall kill switch
-  // for the whole passive system; this one just controls whether the
-  // very FIRST ad (the one auto_ad_first_delay_seconds after open)
-  // fires. Off = skip that first one but keep the recurring
-  // interval-based ones running on schedule — see AutoAds.jsx.
   auto_ad_first_enabled: { type: 'boolean', default: true },
   auto_ad_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
   auto_ad_first_delay_seconds: { type: 'number', default: 30, min: 1 },

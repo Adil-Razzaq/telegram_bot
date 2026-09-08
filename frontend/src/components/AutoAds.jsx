@@ -15,75 +15,108 @@ import { showAdsgramInterstitial } from '../adsgram';
  * block from the Rewarded one used for actions), falling back to
  * adsgram_block_id if that's not set.
  *
- * Monetag: Monetag's own SDK handles ALL scheduling internally
- * (first-delay, interval, frequency/capping, AND re-showing on tab
- * switches via everyPage:true) — enableInAppInterstitial is called once
- * and Monetag does the rest; no JS timers needed on our side.
+ * DECOUPLED ON PURPOSE, in two separate effects below:
+ *   - Effect 1 (STARTUP): the very first ad on app open. Gated ONLY by
+ *     auto_ad_first_enabled — runs regardless of auto_ad_enabled, so
+ *     turning off the "rest" of passive ads never removes the startup
+ *     one.
+ *   - Effect 2 (REPEAT): the interval + tab-switch re-shows. Gated by
+ *     auto_ad_enabled, entirely independent of Effect 1.
+ * Both can be on, either alone, or neither — every combination works.
  *
- * Adsgram: has no equivalent scheduling API — show() just shows one ad
- * immediately when called. So the first-delay timer, repeat interval,
- * tab-switch detection (via the Page Visibility API), and frequency cap
- * are all implemented here in plain JS.
+ * Monetag: Monetag's own SDK handles scheduling internally per show_()
+ * call. Effect 1 asks for exactly one impression (frequency: 1, a huge
+ * capping window) so it never repeats on its own; Effect 2 (if enabled)
+ * makes its own separate call with the admin's real frequency/interval/
+ * capping and everyPage:true. Calling show_() a second time with new
+ * inAppSettings just updates Monetag's running session rather than
+ * stacking two competing schedules, so having both effects call it is
+ * safe.
+ *
+ * Adsgram: has no scheduling API — show() just shows one ad immediately
+ * when called. So Effect 1's delay and Effect 2's interval/tab-switch
+ * detection (Page Visibility API) and frequency cap are implemented
+ * here in plain JS. Both effects share one `shownTimestamps` ref so the
+ * cap counts every impression, startup included.
  */
 export default function AutoAds({ config }) {
   const shownTimestamps = useRef([]);
 
-  useEffect(() => {
-    if (!config?.auto_ad_enabled) return undefined;
+  function underCap(cappingHours, frequency) {
+    const cappingMs = cappingHours * 60 * 60 * 1000;
+    const now = Date.now();
+    shownTimestamps.current = shownTimestamps.current.filter((ts) => now - ts < cappingMs);
+    return shownTimestamps.current.length < frequency;
+  }
 
-    const firstEnabled = config.auto_ad_first_enabled !== false;
+  // Effect 1 — STARTUP ad. Independent of auto_ad_enabled.
+  useEffect(() => {
+    if (!config || config.auto_ad_first_enabled === false) return undefined;
 
     if (config.auto_ad_network === 'monetag') {
-      // Monetag's own scheduler bundles "first" + "repeat" into one
-      // internal timer (timeout, then interval from then on) — there's
-      // no separate on/off for just the first one in their API. To
-      // honor auto_ad_first_enabled = false, we just start that
-      // internal timer later: at first_delay + interval instead of
-      // first_delay, so its own "first" firing lands where the SECOND
-      // one would have been, and every firing after that follows the
-      // normal interval from there.
-      const startDelay = firstEnabled
-        ? config.auto_ad_first_delay_seconds
-        : config.auto_ad_first_delay_seconds + config.auto_ad_interval_seconds;
       const t = setTimeout(() => {
         enableInAppInterstitial({
-          frequency: config.auto_ad_frequency,
-          capping: config.auto_ad_capping_hours,
+          frequency: 1,
+          capping: 24 * 365, // ~once a year via THIS call = effectively a single one-off show
           interval: config.auto_ad_interval_seconds,
-          timeoutSeconds: 0, // we already waited startDelay via this setTimeout
-          everyPage: true,
+          timeoutSeconds: 0, // we already waited via this setTimeout
+          everyPage: false,
         });
-      }, startDelay * 1000);
+      }, config.auto_ad_first_delay_seconds * 1000);
       return () => clearTimeout(t);
     }
 
     // network === 'adsgram'
-    // Interstitial is a different Adsgram block than the Rewarded one
-    // used for actions — falls back to adsgram_block_id if the admin
-    // hasn't set a dedicated interstitial block yet.
     const blockId = config.adsgram_interstitial_block_id || config.adsgram_block_id;
     if (!blockId) return undefined;
 
-    const cappingMs = config.auto_ad_capping_hours * 60 * 60 * 1000;
+    const t = setTimeout(() => {
+      if (!underCap(config.auto_ad_capping_hours, config.auto_ad_frequency)) return;
+      shownTimestamps.current.push(Date.now());
+      showAdsgramInterstitial(blockId).catch(() => {});
+    }, config.auto_ad_first_delay_seconds * 1000);
+    return () => clearTimeout(t);
+  }, [
+    config?.auto_ad_first_enabled,
+    config?.auto_ad_network,
+    config?.auto_ad_first_delay_seconds,
+    config?.adsgram_block_id,
+    config?.adsgram_interstitial_block_id,
+    config?.auto_ad_capping_hours,
+    config?.auto_ad_frequency,
+  ]);
 
-    function underCap() {
-      const now = Date.now();
-      shownTimestamps.current = shownTimestamps.current.filter((ts) => now - ts < cappingMs);
-      return shownTimestamps.current.length < config.auto_ad_frequency;
+  // Effect 2 — REPEAT ads (interval + tab-switch). Independent of
+  // auto_ad_first_enabled / Effect 1 above.
+  useEffect(() => {
+    if (!config?.auto_ad_enabled) return undefined;
+
+    if (config.auto_ad_network === 'monetag') {
+      // Own separate call from Effect 1 — see comment above the
+      // component for why running both is safe. First REPEAT fire is
+      // one full interval after mount (Effect 1 already covers the
+      // very first impression when it's enabled; when it's not, this
+      // is simply the first ad the user sees).
+      enableInAppInterstitial({
+        frequency: config.auto_ad_frequency,
+        capping: config.auto_ad_capping_hours,
+        interval: config.auto_ad_interval_seconds,
+        timeoutSeconds: config.auto_ad_interval_seconds,
+        everyPage: true,
+      });
+      return undefined;
     }
 
+    // network === 'adsgram'
+    const blockId = config.adsgram_interstitial_block_id || config.adsgram_block_id;
+    if (!blockId) return undefined;
+
     function tryShow() {
-      if (!underCap()) return;
+      if (!underCap(config.auto_ad_capping_hours, config.auto_ad_frequency)) return;
       shownTimestamps.current.push(Date.now());
       showAdsgramInterstitial(blockId).catch(() => {});
     }
 
-    // firstEnabled = false just skips THIS call — the interval timer
-    // below still starts counting from mount either way, so the
-    // recurring schedule is unaffected by skipping the first one.
-    const firstTimer = setTimeout(() => {
-      if (firstEnabled) tryShow();
-    }, config.auto_ad_first_delay_seconds * 1000);
     const intervalTimer = setInterval(tryShow, config.auto_ad_interval_seconds * 1000);
 
     // "when tab switches" — fires when the user returns to this tab
@@ -94,17 +127,14 @@ export default function AutoAds({ config }) {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      clearTimeout(firstTimer);
       clearInterval(intervalTimer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [
     config?.auto_ad_enabled,
-    config?.auto_ad_first_enabled,
     config?.auto_ad_network,
     config?.adsgram_block_id,
     config?.adsgram_interstitial_block_id,
-    config?.auto_ad_first_delay_seconds,
     config?.auto_ad_interval_seconds,
     config?.auto_ad_frequency,
     config?.auto_ad_capping_hours,

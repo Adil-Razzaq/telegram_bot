@@ -235,13 +235,13 @@ async function reconcileStuckReferrals() {
 }
 
 async function prepareClaim({ telegramId }) {
-  return startAdEventIfRequired({ telegramId, action: 'referral_claim' });
+  return startAdEventIfRequired({ telegramId, action: 'referral_claim', settingKey: 'referral_claim_ads_enabled' });
 }
 
 async function claimReferral({ telegramId, nonce }) {
   const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
   await rolloverUserRefCounterIfNeeded(telegramId);
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'referral_claim' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'referral_claim', settingKey: 'referral_claim_ads_enabled' });
 
   const tx = await client.transaction('write');
   try {

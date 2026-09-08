@@ -183,26 +183,31 @@ async function confirmOldestPendingByUser({ telegramId, action, estimatedPrice =
 
 const { getAllSettings } = require('./settings');
 
-// Every reward-gated action (spin, miner start/claim, referral claim,
-// task claim, watch-ad tasks) goes through these two instead of calling
-// startAdEvent/consumeAdEvent directly, so the admin's single
-// action_ads_enabled switch (Settings panel) affects all of them at
-// once. When off, prepare returns null (frontend skips showRewardedAd
-// entirely — see each component's handleX function) and consume is a
-// no-op (nothing to verify, the ad requirement is off). The stale-row
-// cleanup for Adsgram's shared-block queue lives in startAdEvent itself
-// now, so every caller gets it regardless of whether it goes through
-// this wrapper (streakService, taskBannerService and adWatchService
-// call startAdEvent directly).
-async function startAdEventIfRequired({ telegramId, action }) {
-  const { action_ads_enabled } = await getAllSettings();
-  if (!action_ads_enabled) return null;
+// Every reward-gated action (spin, miner start/claim/boost, referral
+// claim, withdrawal request, task claim, watch-ad tasks) goes through
+// these two instead of calling startAdEvent/consumeAdEvent directly.
+// `settingKey` names WHICH admin boolean gates this specific action —
+// each caller passes its own dedicated setting (spin_ads_enabled,
+// miner_start_ads_enabled, etc.) so every button's ad requirement is
+// independently switchable in the admin panel, instead of one shared
+// on/off for all of them. When that setting is off, prepare returns
+// null (frontend skips showing an ad entirely — see each component's
+// handleX function) and consume is a no-op (nothing to verify, the ad
+// requirement is off). The stale-row cleanup for Adsgram's shared-block
+// queue lives in startAdEvent itself, so every caller gets it
+// regardless of whether it goes through this wrapper (taskBannerService
+// and adWatchService call startAdEvent directly — those two already
+// have their own independent gating via daily-limit / block-id
+// settings, not a boolean here).
+async function startAdEventIfRequired({ telegramId, action, settingKey }) {
+  const settings = await getAllSettings();
+  if (!settings[settingKey]) return null;
   return startAdEvent({ telegramId, action });
 }
 
-async function consumeAdEventIfRequired({ nonce, telegramId, action }) {
-  const { action_ads_enabled } = await getAllSettings();
-  if (!action_ads_enabled) return null;
+async function consumeAdEventIfRequired({ nonce, telegramId, action, settingKey }) {
+  const settings = await getAllSettings();
+  if (!settings[settingKey]) return null;
   return consumeAdEvent({ nonce, telegramId, action });
 }
 

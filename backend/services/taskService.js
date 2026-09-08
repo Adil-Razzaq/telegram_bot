@@ -224,11 +224,11 @@ async function prepareAdTask({ telegramId, taskId }) {
     err.statusCode = 409;
     throw err;
   }
-  return startAdEventIfRequired({ telegramId, action: `ad_task:${taskId}` });
+  return startAdEventIfRequired({ telegramId, action: `ad_task:${taskId}`, settingKey: 'action_ads_enabled' });
 }
 
 async function claimAdTask({ telegramId, taskId, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: `ad_task:${taskId}` });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: `ad_task:${taskId}`, settingKey: 'action_ads_enabled' });
 
   const taskRes = await client.execute({
     sql: "SELECT * FROM tasks WHERE id = ? AND active = 1 AND task_type = 'watch_ad'",

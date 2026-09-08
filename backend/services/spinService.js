@@ -102,7 +102,7 @@ async function getSpinConfigForUser({ telegramId }) {
 }
 
 async function prepareSpin({ telegramId }) {
-  return startAdEventIfRequired({ telegramId, action: 'spin' });
+  return startAdEventIfRequired({ telegramId, action: 'spin', settingKey: 'spin_ads_enabled' });
 }
 
 /**
@@ -120,7 +120,7 @@ async function playSpin({ telegramId, nonce }) {
   // and it's not exploitable (a wasted ad view costs the user, not us).
   // event.estimated_price (Monetag's real revenue for this exact ad
   // view) is what a free spin's payout gets matched against below.
-  const event = await consumeAdEventIfRequired({ nonce, telegramId, action: 'spin' });
+  const event = await consumeAdEventIfRequired({ nonce, telegramId, action: 'spin', settingKey: 'spin_ads_enabled' });
 
   const config = await getSpinConfig();
   const settings = await getAllSettings();

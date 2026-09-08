@@ -24,30 +24,15 @@ function showViaNetwork(network, nonce, adConfig) {
  * just skip showing an ad at all and let the caller proceed straight to
  * its claim/confirm step.
  *
- * FALLBACK: if the admin-selected network has no fill (or is
- * misconfigured), automatically try the OTHER network with the SAME
- * nonce before giving up — see monetagAds.js: confirmation matches by
- * exact nonce (Monetag) or oldest-pending-row-for-this-user (Adsgram),
- * neither cares which network the frontend actually showed the ad
- * through. This can only ever result in a reward if a real ad from
- * EITHER network gets confirmed by its own postback; if both networks
- * fail to serve one, this rejects and the caller (spin/miner/referral/
- * streak) never proceeds to its claim step — no ad watched still means
- * no reward, exactly as before, just resilient to one network's
- * temporary no-fill instead of blocking the user outright.
+ * NO cross-network fallback: only the admin-selected network is tried.
+ * If it has no fill (or is misconfigured), this rejects and the caller
+ * (spin/miner/referral/streak) never proceeds to its claim step — no ad
+ * watched still means no reward. (Previously this retried the other
+ * network with the same nonce before giving up — removed on request.)
  */
 export function showAdForNetwork(nonce, network, adConfig) {
   if (!nonce) return Promise.resolve();
-  const fallbackNetwork = network === 'adsgram' ? 'monetag' : 'adsgram';
-  return showViaNetwork(network, nonce, adConfig).catch((primaryErr) =>
-    showViaNetwork(fallbackNetwork, nonce, adConfig).catch(() => {
-      // Surface the ORIGINAL (admin-selected network's) error — more
-      // actionable for debugging than the fallback's, which is often
-      // just "no Block ID configured" for whichever network isn't the
-      // primary one in use.
-      throw primaryErr;
-    })
-  );
+  return showViaNetwork(network, nonce, adConfig);
 }
 
 /** Convenience wrapper for the spin/miner/referral flows specifically. */
@@ -59,3 +44,4 @@ export function showActionAd(nonce, adConfig) {
 export function showStreakAd(nonce, adConfig) {
   return showAdForNetwork(nonce, adConfig?.streak_ad_network, adConfig);
 }
+

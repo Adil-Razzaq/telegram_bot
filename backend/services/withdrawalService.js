@@ -87,11 +87,11 @@ async function prepareWithdrawal({ telegramId, address, points }) {
     throw err;
   }
 
-  return startAdEventIfRequired({ telegramId, action: 'withdrawal_request' });
+  return startAdEventIfRequired({ telegramId, action: 'withdrawal_request', settingKey: 'withdrawal_ads_enabled' });
 }
 
 async function requestWithdrawal({ telegramId, address, points, nonce }) {
-  await consumeAdEventIfRequired({ nonce, telegramId, action: 'withdrawal_request' });
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'withdrawal_request', settingKey: 'withdrawal_ads_enabled' });
 
   const withdrawalsFlag = await getFlag('withdrawals');
   await validateWithdrawalInputs({ telegramId, address, points, withdrawalsFlag });
