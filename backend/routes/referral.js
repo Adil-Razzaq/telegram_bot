@@ -52,9 +52,12 @@ router.post('/register', telegramAuth, async (req, res) => {
 
 router.get('/status', telegramAuth, async (req, res) => {
   const telegramId = req.telegramUser.id;
-  const referralReward = await getSetting('referral_reward');
+  const [referralReward, requiredCycles] = await Promise.all([
+    getSetting('referral_reward'),
+    getSetting('referral_qualify_miner_cycles'),
+  ]);
   try {
-    const [userRes, totalRes, successfulRes] = await Promise.all([
+    const [userRes, totalRes, successfulRes, pendingQualRes] = await Promise.all([
       client.execute({
         sql: 'SELECT pending_referral_balance, daily_ref_claims_count, last_ref_claim_at, referred_by FROM users WHERE telegram_id = ?',
         args: [telegramId],
@@ -76,9 +79,21 @@ router.get('/status', telegramAuth, async (req, res) => {
               WHERE u.referred_by = ? AND l.type != 'referral_grant'`,
         args: [telegramId],
       }),
+      // ADDED: referrals that exist (referred_by is set) but haven't yet
+      // cleared qualification (referral_qualify_miner_cycles /
+      // referral_require_channel_join) — these are the ones "stuck" in
+      // Friends.jsx's team list with no commission counted yet. Powers
+      // the "locked" bonus preview card so the referrer can see what's
+      // waiting on the other person to actually mine, rather than it
+      // silently earning nothing with no explanation on the frontend.
+      client.execute({
+        sql: 'SELECT COUNT(*) as cnt FROM users WHERE referred_by = ? AND referral_qualified = 0',
+        args: [telegramId],
+      }),
     ]);
 
     const user = userRes.rows[0];
+    const pendingQualificationCount = Number(pendingQualRes.rows[0].cnt);
     res.json({
       ok: true,
       ...user,
@@ -86,6 +101,13 @@ router.get('/status', telegramAuth, async (req, res) => {
       successful_referrals: Number(successfulRes.rows[0].cnt),
       available_claims: Math.floor((user.pending_referral_balance || 0) / referralReward),
       reward_per_claim: referralReward,
+      // Not real, unlocked balance — an estimate of what moves into
+      // pending_referral_balance once each of these referrals hits
+      // referral_qualify_miner_cycles mining cycles. Shown separately
+      // in the UI so it's never confused with claimable points.
+      pending_qualification_count: pendingQualificationCount,
+      locked_referral_bonus_estimate: pendingQualificationCount * referralReward,
+      referral_qualify_miner_cycles: requiredCycles,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -94,15 +116,23 @@ router.get('/status', telegramAuth, async (req, res) => {
 
 // Real list of directly-referred users, most recent first — powers the
 // "Latest invited friends" section. Only username + join date, nothing
-// else about them is exposed here.
+// else about them is exposed here — plus (ADDED) referral_qualified and
+// total_miner_cycles_completed, so the frontend can show each invited
+// friend as active vs. still-pending-activation instead of implying
+// they're all already earning commission.
 router.get('/invited', telegramAuth, async (req, res) => {
   try {
-    const res_ = await client.execute({
-      sql: `SELECT telegram_id, username, created_at FROM users
-            WHERE referred_by = ? ORDER BY created_at DESC LIMIT 50`,
-      args: [req.telegramUser.id],
-    });
-    res.json({ ok: true, invited: res_.rows });
+    const [res_, requiredCycles] = await Promise.all([
+      client.execute({
+        sql: `SELECT telegram_id, username, created_at, referral_qualified,
+                     total_miner_cycles_completed
+              FROM users
+              WHERE referred_by = ? ORDER BY created_at DESC LIMIT 50`,
+        args: [req.telegramUser.id],
+      }),
+      getSetting('referral_qualify_miner_cycles'),
+    ]);
+    res.json({ ok: true, invited: res_.rows, referral_qualify_miner_cycles: requiredCycles });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

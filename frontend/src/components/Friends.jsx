@@ -98,6 +98,9 @@ export default function Friends({ telegramId, onBalanceChange }) {
 
   const availableClaims = status.available_claims ?? 0;
   const canClaim = !claiming && secondsLeft === 0 && availableClaims > 0;
+  const pendingQualificationCount = status.pending_qualification_count ?? 0;
+  const lockedBonusEstimate = status.locked_referral_bonus_estimate ?? 0;
+  const requiredCycles = status.referral_qualify_miner_cycles ?? 0;
 
   return (
     <div className="friends-container">
@@ -144,6 +147,37 @@ export default function Friends({ telegramId, onBalanceChange }) {
         </button>
       </div>
 
+      {/* ADDED: only shown when admin has referral_qualify_miner_cycles > 0
+          (gating is actually on) and at least one referral is still
+          waiting on it — otherwise this card would just be permanent
+          clutter for every referrer whose invites are all instantly
+          credited, which is still the default. Same icon-chip + title +
+          subtitle + trailing-value layout as the Referral Reward card
+          above, so it reads as part of the same set instead of a
+          different kind of thing — the purple trailing chip (vs. the
+          gold Claim button) is what signals "not claimable yet". This
+          is an estimate of what moves into that gold card once each
+          pending friend finishes enough mining cycles — never a real,
+          spendable balance on its own. */}
+      {requiredCycles > 0 && pendingQualificationCount > 0 && (
+        <div className="glass-card">
+          <span
+            className="glass-card-icon round"
+            style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}
+          >
+            🔒
+          </span>
+          <div className="glass-card-body">
+            <p className="glass-card-title">Locked Referral Bonus</p>
+            <p className="glass-card-subtitle">
+              {pendingQualificationCount} friend{pendingQualificationCount === 1 ? '' : 's'} not
+              active yet · unlocks after {requiredCycles} cycle{requiredCycles === 1 ? '' : 's'}
+            </p>
+          </div>
+          <span className="locked-chip">+{lockedBonusEstimate}</span>
+        </div>
+      )}
+
       {/* Not backed by real data yet — see chat for what a genuine
           multi-level network-earnings mechanic would need. Shown
           disabled rather than with a fabricated number. */}
@@ -170,15 +204,35 @@ export default function Friends({ telegramId, onBalanceChange }) {
           <p className="page-subtitle" style={{ margin: '8px 0 0' }}>No invited friends yet.</p>
         ) : (
           <ul className="friends-invited-list">
-            {invited.map((u) => (
-              <li key={u.telegram_id}>
-                <span className="friends-invited-avatar">
-                  {(u.username || String(u.telegram_id))[0].toUpperCase()}
-                </span>
-                <span className="friends-invited-name">{u.username ? `@${u.username}` : `User ${u.telegram_id}`}</span>
-                <span className="friends-invited-time">{timeAgo(u.created_at)}</span>
-              </li>
-            ))}
+            {invited.map((u) => {
+              // ADDED: qualification badge. When gating is off
+              // (requiredCycles === 0, the existing default) every
+              // referred user was credited instantly as before, so
+              // referral_qualified is always 1 and this renders exactly
+              // like the old "just the timestamp" row.
+              const isQualified = !!u.referral_qualified;
+              const cyclesDone = u.total_miner_cycles_completed || 0;
+              return (
+                <li key={u.telegram_id}>
+                  <span className="friends-invited-avatar">
+                    {(u.username || String(u.telegram_id))[0].toUpperCase()}
+                  </span>
+                  <span className="friends-invited-name">
+                    {u.username ? `@${u.username}` : `User ${u.telegram_id}`}
+                  </span>
+                  {isQualified ? (
+                    <span className="friends-invited-time">{timeAgo(u.created_at)}</span>
+                  ) : (
+                    <span
+                      className="pending-badge"
+                      title="Commission unlocks once this friend finishes enough mining cycles"
+                    >
+                      Pending{requiredCycles > 0 ? ` · ${cyclesDone}/${requiredCycles}` : ''}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
