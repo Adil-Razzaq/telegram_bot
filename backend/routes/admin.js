@@ -14,6 +14,7 @@ const {
   rejectWithdrawal,
 } = require('../services/withdrawalService');
 const { getRecentActivity } = require('../services/streamService');
+const analyticsService = require('../services/analyticsService');
 
 const router = express.Router();
 router.use(adminAuth);
@@ -405,6 +406,56 @@ router.get('/stream', async (req, res) => {
     res.json({ ok: true, activity });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Analytics page (backend/public/analytics.html) ---
+// Everything here is read-only aggregation — see analyticsService.js.
+
+router.get('/analytics/overview', async (req, res) => {
+  try {
+    res.json({ ok: true, overview: await analyticsService.getOverview() });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// ?days=30 (default)
+router.get('/analytics/new-users', async (req, res) => {
+  try {
+    const days = req.query.days ? Number(req.query.days) : 30;
+    res.json({ ok: true, series: await analyticsService.getNewUsersSeries({ days }) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/analytics/countries', async (req, res) => {
+  try {
+    res.json({ ok: true, countries: await analyticsService.getCountryBreakdown() });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// ?granularity=day|week|month (default day) & ?days=30 (default)
+router.get('/analytics/impressions', async (req, res) => {
+  try {
+    const granularity = ['day', 'week', 'month'].includes(req.query.granularity)
+      ? req.query.granularity
+      : 'day';
+    const days = req.query.days ? Number(req.query.days) : 30;
+    res.json({ ok: true, rows: await analyticsService.getImpressions({ granularity, days }) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/analytics/user/:telegramId', async (req, res) => {
+  try {
+    res.json({ ok: true, profile: await analyticsService.getUserProfile(req.params.telegramId) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
 });
 

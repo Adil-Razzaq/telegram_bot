@@ -39,16 +39,25 @@ function formatBoostCountdown(totalSeconds) {
 // (boost turning on/off) can't retroactively over- or under-count
 // time that elapsed under a different rate.
 function computeSyncFromStatus(s) {
-  if (!s || s.status !== 'running') return { anchor: 0, floor: 0, rate: 0 };
+  if (!s || s.status !== 'running') return { anchor: 0, floor: 0, rate: 0, capAtMs: null };
   return {
     anchor: Date.now(),
     floor: s.accrued_now_precise ?? s.accrued_now ?? 0,
     rate: s.rate_per_second,
+    // Caps the live extrapolation below at the exact moment the cycle
+    // actually ends — matches accruedNowPrecise's own elapsedSeconds
+    // cap on the backend (see minerService.js). Without this, the
+    // on-screen number kept climbing for up to 15s after the timer hit
+    // zero (until the next poll silently corrected it), even though
+    // the real payout was already correctly capped the whole time —
+    // the money was always right, only the display kept ticking.
+    capAtMs: s.cycle_ends_at ? new Date(s.cycle_ends_at + 'Z').getTime() : null,
   };
 }
 function readSync(sync) {
   if (!sync.rate && !sync.floor) return 0;
-  const elapsed = Math.max(0, (Date.now() - sync.anchor) / 1000);
+  const now = sync.capAtMs != null ? Math.min(Date.now(), sync.capAtMs) : Date.now();
+  const elapsed = Math.max(0, (now - sync.anchor) / 1000);
   return sync.floor + sync.rate * elapsed;
 }
 

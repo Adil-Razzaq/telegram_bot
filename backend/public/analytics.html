@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Analytics</title>
+<style>
+  :root {
+    --bg: #0b0e14; --surface: #141822; --surface-2: #1b2130; --border: #262e40;
+    --text: #edeff3; --muted: #8a93a8; --accent: #e8a33d; --success: #34d399; --danger: #f0594f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 20px; max-width: 960px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h2 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 28px 0 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  input, select {
+    padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-size: 14px; margin-bottom: 8px;
+  }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  button {
+    background: var(--accent); color: #16130a; border: none; border-radius: 8px;
+    padding: 10px 16px; font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .status-msg { font-size: 13px; margin-top: 8px; }
+  .status-msg.ok { color: var(--success); }
+  .status-msg.err { color: var(--danger); }
+  #keyGate { text-align: center; margin-top: 60px; }
+  #app { display: none; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat { background: var(--surface-2); border-radius: 10px; padding: 12px; }
+  .stat .value { font-size: 22px; font-weight: 700; }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .bar-track { background: var(--surface-2); border-radius: 4px; height: 8px; overflow: hidden; margin-top: 3px; }
+  .bar-fill { background: var(--accent); height: 100%; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--surface-2); }
+  .pill.monetag { color: #7dd3fc; }
+  .pill.adsgram { color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<div id="keyGate">
+  <h1>Analytics</h1>
+  <p class="muted">Enter your admin key to continue. It's stored only in this browser (localStorage) — never sent anywhere except your own API.</p>
+  <input id="keyInput" type="password" placeholder="Admin API key" />
+  <button onclick="saveKey()">Continue</button>
+</div>
+
+<div id="app">
+  <h1>Analytics</h1>
+  <a href="/admin"><button class="secondary" type="button" style="float:right">← Admin Panel</button></a>
+  <button class="secondary" onclick="clearKey()" style="float:right; margin-right:10px;">Change key</button>
+  <div style="clear:both"></div>
+
+  <h2>Overview</h2>
+  <div class="card">
+    <div id="overviewGrid" class="stat-grid">Loading…</div>
+  </div>
+
+  <h2>Look Up a User</h2>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Telegram ID</label>
+        <input id="lookupId" type="number" placeholder="123456789" />
+      </div>
+      <button onclick="lookupUser()">Search</button>
+    </div>
+    <div id="lookupResult"></div>
+  </div>
+
+  <h2>New Users</h2>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Days back</label>
+        <input id="newUsersDays" type="number" value="14" min="1" />
+      </div>
+      <button onclick="loadNewUsers()">Refresh</button>
+    </div>
+    <div id="newUsersChart" class="muted">Loading…</div>
+  </div>
+
+  <h2>Ad Impressions</h2>
+  <div class="card">
+    <p class="muted">
+      Grouped by network (Monetag vs Adsgram) and by which button/slot triggered the ad. Counts come from
+      confirmed postbacks only — see <code>ad_postback_log</code>.
+    </p>
+    <div class="row">
+      <div>
+        <label>Granularity</label>
+        <select id="impGranularity">
+          <option value="day">Daily</option>
+          <option value="week">Weekly</option>
+          <option value="month">Monthly</option>
+        </select>
+      </div>
+      <div>
+        <label>Days back</label>
+        <input id="impDays" type="number" value="30" min="1" />
+      </div>
+      <button onclick="loadImpressions()">Refresh</button>
+    </div>
+    <div id="impressionsSummary" class="muted" style="margin:10px 0"></div>
+    <div id="impressionsTable">Loading…</div>
+  </div>
+
+  <h2>Countries</h2>
+  <div class="card">
+    <p class="muted">Best-effort, from IP at first sight — Telegram doesn't provide this directly, so treat as approximate.</p>
+    <div id="countriesTable">Loading…</div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = window.location.origin + '/api';
+
+  function getKey() { return localStorage.getItem('adminKey'); }
+  function saveKey() {
+    const key = document.getElementById('keyInput').value.trim();
+    if (!key) return;
+    localStorage.setItem('adminKey', key);
+    init();
+  }
+  function clearKey() {
+    localStorage.removeItem('adminKey');
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('keyGate').style.display = 'block';
+  }
+
+  async function adminFetch(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': getKey(), ...(options.headers || {}) },
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function loadOverview() {
+    const el = document.getElementById('overviewGrid');
+    try {
+      const { overview: o } = await adminFetch('/admin/analytics/overview');
+      const stats = [
+        ['Total users', o.total_users],
+        ['Active (1d)', o.active_last_1d],
+        ['Active (3d)', o.active_last_3d],
+        ['Active (7d)', o.active_last_7d],
+        ['New users (1d)', o.new_users_last_1d],
+        ['New users (7d)', o.new_users_last_7d],
+        [`Can withdraw (≥${o.min_withdrawal_points} pts)`, o.withdraw_eligible_count],
+        ['Pending withdrawals', `${o.pending_withdrawals_count} ($${Number(o.pending_withdrawals_amount_usd).toFixed(2)})`],
+        ['Completed withdrawals ($)', `$${Number(o.completed_withdrawals_amount_usd).toFixed(2)}`],
+        ['Monetag est. revenue ($)', `$${Number(o.estimated_monetag_revenue_usd).toFixed(4)}`],
+      ];
+      el.innerHTML = stats.map(([label, value]) => `
+        <div class="stat">
+          <div class="value">${esc(value)}</div>
+          <div class="label">${esc(label)}</div>
+        </div>
+      `).join('');
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;
+    }
+  }
+
+  async function lookupUser() {
+    const id = document.getElementById('lookupId').value.trim();
+    const el = document.getElementById('lookupResult');
+    if (!id) return;
+    el.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const { profile: p } = await adminFetch(`/admin/analytics/user/${encodeURIComponent(id)}`);
+      const u = p.user;
+      const rows = [
+        ['Username', u.username ? '@' + u.username : '—'],
+        ['Main balance', u.main_balance],
+        ['Pending referral balance', u.pending_referral_balance],
+        ['Referred by', u.referred_by || '—'],
+        ['Referral qualified', u.referral_qualified ? 'Yes' : 'No'],
+        ['Referrals made', p.referrals_made_count],
+        ['Total miner cycles completed', u.total_miner_cycles_completed || 0],
+        ['Wallet address', u.wallet_address || '—'],
+        ['Country', u.country || 'Unknown'],
+        ['Joined', u.created_at],
+        ['Last seen', u.last_seen_at || '—'],
+        ['Last referral claim', u.last_ref_claim_at || '—'],
+      ];
+      const minerRows = p.miner_state
+        ? [
+            ['Miner status', p.miner_state.status],
+            ['Cycle ends at', p.miner_state.cycle_ends_at || '—'],
+            ['Cycles completed today', p.miner_state.cycles_completed_today],
+          ]
+        : [['Miner status', 'never started']];
+      const streakRows = p.streak
+        ? [
+            ['Streak day', p.streak.streak_day],
+            ['Last streak claim', p.streak.last_claim_date || '—'],
+          ]
+        : [['Streak', 'no streak activity']];
+
+      const kv = (rows) => rows.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+
+      const ledgerRows = p.recent_ledger.map((r) => `
+        <tr><td>${esc(r.created_at)}</td><td>${esc(r.type)}</td><td>${r.points_delta > 0 ? '+' : ''}${esc(r.points_delta)}</td></tr>
+      `).join('') || '<tr><td colspan="3" class="muted">No ledger entries</td></tr>';
+
+      const withdrawalRows = p.recent_withdrawals.map((w) => `
+        <tr><td>${esc(w.created_at)}</td><td>$${Number(w.amount_usd).toFixed(2)}</td><td>${esc(w.status)}</td></tr>
+      `).join('') || '<tr><td colspan="3" class="muted">No withdrawals</td></tr>';
+
+      const adRows = p.ad_event_summary.map((a) => `
+        <tr><td>${esc(a.action)}</td><td>${esc(a.status)}</td><td>${esc(a.count)}</td></tr>
+      `).join('') || '<tr><td colspan="3" class="muted">No ad events</td></tr>';
+
+      el.innerHTML = `
+        <table>${kv(rows)}${kv(minerRows)}${kv(streakRows)}</table>
+        <h2 style="margin-top:18px">Recent Ledger (last 25)</h2>
+        <table><tr><th>When</th><th>Type</th><th>Δ Points</th></tr>${ledgerRows}</table>
+        <h2 style="margin-top:18px">Recent Withdrawals (last 10)</h2>
+        <table><tr><th>When</th><th>Amount</th><th>Status</th></tr>${withdrawalRows}</table>
+        <h2 style="margin-top:18px">Ad Event Summary</h2>
+        <table><tr><th>Action</th><th>Status</th><th>Count</th></tr>${adRows}</table>
+      `;
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;
+    }
+  }
+
+  async function loadNewUsers() {
+    const el = document.getElementById('newUsersChart');
+    const days = document.getElementById('newUsersDays').value || 14;
+    el.innerHTML = 'Loading…';
+    try {
+      const { series } = await adminFetch(`/admin/analytics/new-users?days=${encodeURIComponent(days)}`);
+      if (series.length === 0) {
+        el.innerHTML = '<p class="muted">No new users in this window.</p>';
+        return;
+      }
+      const max = Math.max(...series.map((r) => r.count), 1);
+      el.innerHTML = `<table>${series.map((r) => `
+        <tr>
+          <td style="width:100px">${esc(r.day)}</td>
+          <td style="width:40px; text-align:right">${esc(r.count)}</td>
+          <td><div class="bar-track"><div class="bar-fill" style="width:${(r.count / max) * 100}%"></div></div></td>
+        </tr>
+      `).join('')}</table>`;
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;
+    }
+  }
+
+  async function loadImpressions() {
+    const summaryEl = document.getElementById('impressionsSummary');
+    const tableEl = document.getElementById('impressionsTable');
+    const granularity = document.getElementById('impGranularity').value;
+    const days = document.getElementById('impDays').value || 30;
+    tableEl.innerHTML = 'Loading…';
+    summaryEl.innerHTML = '';
+    try {
+      const { rows } = await adminFetch(`/admin/analytics/impressions?granularity=${granularity}&days=${encodeURIComponent(days)}`);
+      if (rows.length === 0) {
+        tableEl.innerHTML = '<p class="muted">No impressions in this window.</p>';
+        return;
+      }
+
+      // Network totals for the summary line.
+      const totals = {};
+      for (const r of rows) totals[r.network] = (totals[r.network] || 0) + r.count;
+      summaryEl.innerHTML = Object.entries(totals)
+        .map(([net, count]) => `<span class="pill ${esc(net)}">${esc(net)}: ${esc(count)}</span>`)
+        .join(' &nbsp; ');
+
+      // Bucket -> network -> type -> count, rendered as one row per bucket+network+type (simplest, most literal view).
+      const sorted = [...rows].sort((a, b) => (a.bucket < b.bucket ? 1 : -1));
+      tableEl.innerHTML = `
+        <table>
+          <tr><th>Period</th><th>Network</th><th>Type</th><th>Count</th></tr>
+          ${sorted.map((r) => `
+            <tr>
+              <td>${esc(r.bucket)}</td>
+              <td><span class="pill ${esc(r.network)}">${esc(r.network)}</span></td>
+              <td>${esc(r.type)}</td>
+              <td>${esc(r.count)}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `;
+    } catch (e) {
+      tableEl.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;
+    }
+  }
+
+  async function loadCountries() {
+    const el = document.getElementById('countriesTable');
+    try {
+      const { countries } = await adminFetch('/admin/analytics/countries');
+      if (countries.length === 0) {
+        el.innerHTML = '<p class="muted">No data yet.</p>';
+        return;
+      }
+      el.innerHTML = `
+        <table>
+          <tr><th>Country</th><th>Users</th><th>%</th></tr>
+          ${countries.map((c) => `
+            <tr>
+              <td>${esc(c.country)}</td>
+              <td>${esc(c.count)}</td>
+              <td>
+                ${esc(c.percent)}%
+                <div class="bar-track"><div class="bar-fill" style="width:${c.percent}%"></div></div>
+              </td>
+            </tr>
+          `).join('')}
+        </table>
+      `;
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;
+    }
+  }
+
+  function init() {
+    if (!getKey()) return;
+    document.getElementById('keyGate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadOverview();
+    loadNewUsers();
+    loadImpressions();
+    loadCountries();
+  }
+
+  init();
+</script>
+</body>
+</html>

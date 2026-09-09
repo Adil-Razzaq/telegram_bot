@@ -19,6 +19,13 @@ let cacheAt = 0;
 const SETTING_DEFS = {
   points_per_usd: { type: 'number', default: 10000, min: 0.0001 }, // 10,000 points = $1
   referral_reward: { type: 'number', default: 100, min: 0 }, // points granted to the referrer per successful ad-watched claim
+  // Was hardcoded (DAILY_CLAIM_CAP = 20, COOLDOWN_SECONDS = 60) in
+  // referralService.js — now admin-editable. Cooldown is UI-only (the
+  // frontend disables the Claim button for this long after a claim,
+  // based on last_ref_claim_at) — the daily cap IS enforced
+  // server-side.
+  referral_daily_claim_cap: { type: 'number', default: 20, min: 1 },
+  referral_claim_cooldown_seconds: { type: 'number', default: 60, min: 0 },
   miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
   miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
   miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js

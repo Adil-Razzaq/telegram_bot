@@ -55,6 +55,8 @@
 <div id="app">
   <h1>Admin Panel</h1>
   <button class="secondary" onclick="clearKey()" style="float:right">Change key</button>
+  <a href="/analytics" style="float:right; margin-right:10px;"><button class="secondary" type="button">📊 Analytics</button></a>
+  <div style="clear:both"></div>
 
   <h2>Pending Withdrawals</h2>
   <div id="withdrawalsList" class="card">Loading…</div>
@@ -395,6 +397,8 @@
   const SETTINGS_LABELS = {
     points_per_usd: 'Points per $1',
     referral_reward: 'Referral reward (points/claim)',
+    referral_daily_claim_cap: 'Referral: max claims per day (server-enforced)',
+    referral_claim_cooldown_seconds: 'Referral: cooldown after a claim, seconds (UI only)',
     miner_daily_points: 'Miner: total points/day',
     miner_cycles_per_day: 'Miner: cycles/day',
     miner_cycle_hours: 'Miner: hours/cycle',

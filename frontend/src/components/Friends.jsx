@@ -3,8 +3,6 @@ import { api } from '../api';
 import { withConfirmationRetry } from '../monetag';
 import { showActionAd } from '../adNetwork';
 
-const COOLDOWN_SECONDS = 60;
-
 function timeAgo(iso) {
   const seconds = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000);
   if (seconds < 60) return 'just now';
@@ -23,9 +21,15 @@ export default function Friends({ telegramId, onBalanceChange }) {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [copied, setCopied] = useState(false);
   // Only needed for showActionAd's network switch (action_ads_network /
-  // adsgram_block_id) — nothing else here reads it.
+  // adsgram_block_id) — nothing else here reads it, EXCEPT the cooldown
+  // ref below, which pulls referral_claim_cooldown_seconds off this
+  // same config object once it loads.
   const [adConfig, setAdConfig] = useState(null);
   const timerRef = useRef(null);
+  // Admin-editable (default 60) — was a hardcoded constant. A ref (not
+  // state) so refreshStatus/handleClaim always read the latest value
+  // without needing to be redeclared as a dependency of either.
+  const cooldownSecondsRef = useRef(60);
 
   const botUsername = import.meta.env?.VITE_BOT_USERNAME;
   // startapp= (not start=) — opens the Mini App DIRECTLY, no bot-chat
@@ -43,7 +47,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
       setStatus(s);
       if (s.last_ref_claim_at) {
         const elapsed = (Date.now() - new Date(s.last_ref_claim_at).getTime()) / 1000;
-        setSecondsLeft(Math.max(0, Math.ceil(COOLDOWN_SECONDS - elapsed)));
+        setSecondsLeft(Math.max(0, Math.ceil(cooldownSecondsRef.current - elapsed)));
       }
     } catch (e) {
       setError(e.message);
@@ -53,7 +57,14 @@ export default function Friends({ telegramId, onBalanceChange }) {
   useEffect(() => {
     refreshStatus();
     api.referralInvited().then((r) => setInvited(r.invited)).catch(() => setInvited([]));
-    api.getConfig().then(setAdConfig).catch(() => {});
+    api.getConfig()
+      .then((cfg) => {
+        setAdConfig(cfg);
+        if (cfg?.referral_claim_cooldown_seconds != null) {
+          cooldownSecondsRef.current = cfg.referral_claim_cooldown_seconds;
+        }
+      })
+      .catch(() => {});
   }, [refreshStatus]);
 
   useEffect(() => {
@@ -76,7 +87,7 @@ export default function Friends({ telegramId, onBalanceChange }) {
       const claimResult = await withConfirmationRetry(() => api.claimReferral(nonce));
       setStatus((prev) => ({ ...prev, ...claimResult }));
       onBalanceChange(claimResult.main_balance);
-      setSecondsLeft(COOLDOWN_SECONDS);
+      setSecondsLeft(cooldownSecondsRef.current);
       await refreshStatus();
     } catch (e) {
       setError(e.message);

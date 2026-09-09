@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { client } = require('../db/db');
+const { lookupCountry } = require('../utils/geoLookup');
 
 /**
  * Validates Telegram WebApp `initData` per Telegram's documented algorithm:
@@ -81,6 +82,35 @@ async function telegramAuth(req, res, next) {
             ON CONFLICT(telegram_id) DO UPDATE SET username = excluded.username`,
       args: [userObj.id, userObj.username || null],
     });
+
+    // Fire-and-forget — never let analytics bookkeeping slow down or
+    // fail a real request. last_seen_at updates on EVERY authenticated
+    // request (what "active in the last 1/3/7 days" is computed from
+    // in analyticsService.js); the country lookup only ever runs ONCE
+    // per user (guarded by the WHERE country IS NULL below), the first
+    // time they're seen after this column existed.
+    client
+      .execute({
+        sql: `UPDATE users SET last_seen_at = CURRENT_TIMESTAMP WHERE telegram_id = ?`,
+        args: [userObj.id],
+      })
+      .catch(() => {});
+
+    // Only ever attempt the external geo lookup once per user — check
+    // first via a cheap indexed PK read, so users who already have a
+    // country recorded cost nothing extra on every subsequent request.
+    client
+      .execute({ sql: `SELECT country FROM users WHERE telegram_id = ?`, args: [userObj.id] })
+      .then(async (result) => {
+        if (result.rows[0]?.country) return; // already known — skip the external call entirely
+        const country = await lookupCountry(req.ip);
+        if (!country) return;
+        await client.execute({
+          sql: `UPDATE users SET country = ? WHERE telegram_id = ? AND country IS NULL`,
+          args: [country, userObj.id],
+        });
+      })
+      .catch(() => {});
 
     next();
   } catch (err) {

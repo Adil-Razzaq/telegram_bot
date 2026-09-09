@@ -64,6 +64,17 @@ const COLUMNS_TO_ENSURE = [
   // gating is off, or later once maybeQualifyReferral's conditions are
   // met). Prevents a referral from ever being rewarded twice.
   { table: 'users', column: 'referral_qualified', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED (admin Analytics page): updated on every authenticated
+  // request (see middleware/telegramAuth.js) — what "active in the
+  // last 1/3/7 days" is computed from in analyticsService.js. Constant
+  // NULL default is fine for ALTER ADD COLUMN.
+  { table: 'users', column: 'last_seen_at', ddl: 'DATETIME' },
+  // ADDED (admin Analytics page): best-effort IP->country lookup, done
+  // ONCE per user (only when still NULL) the first time they're seen
+  // after this column exists — see utils/geoLookup.js and
+  // telegramAuth.js. NULL/failed lookups show up as "Unknown" in the
+  // country breakdown rather than blocking anything.
+  { table: 'users', column: 'country', ddl: 'TEXT' },
 ];
 
 async function ensureColumn(table, column, ddl) {

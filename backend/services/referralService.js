@@ -3,10 +3,9 @@ const { startAdEventIfRequired, consumeAdEventIfRequired } = require('../utils/m
 const { getSetting } = require('../utils/settings');
 const { checkOfficialChannelsMembership } = require('./taskService');
 
-// Default 100 pts/claim (utils/settings.js) — tunable live via the admin
-// panel's Settings section without a deploy.
-const DAILY_CLAIM_CAP = 20;
-const COOLDOWN_SECONDS = 60;
+// referral_reward, referral_daily_claim_cap, and
+// referral_claim_cooldown_seconds are all tunable live via the admin
+// panel's Settings section without a deploy (see utils/settings.js).
 
 // Called from the bot's /start handler (routes/bot.js) the moment a
 // referred user first opens the bot — this is what was missing before:
@@ -239,7 +238,10 @@ async function prepareClaim({ telegramId }) {
 }
 
 async function claimReferral({ telegramId, nonce }) {
-  const REFERRAL_BASE_REWARD = await getSetting('referral_reward');
+  const [REFERRAL_BASE_REWARD, DAILY_CLAIM_CAP] = await Promise.all([
+    getSetting('referral_reward'),
+    getSetting('referral_daily_claim_cap'),
+  ]);
   await rolloverUserRefCounterIfNeeded(telegramId);
   await consumeAdEventIfRequired({ nonce, telegramId, action: 'referral_claim', settingKey: 'referral_claim_ads_enabled' });
 
@@ -262,7 +264,7 @@ async function claimReferral({ telegramId, nonce }) {
       throw err;
     }
     if (user.daily_ref_claims_count >= DAILY_CLAIM_CAP) {
-      const err = new Error('Daily referral claim limit reached (20/day)');
+      const err = new Error(`Daily referral claim limit reached (${DAILY_CLAIM_CAP}/day)`);
       err.statusCode = 429;
       throw err;
     }
@@ -306,6 +308,4 @@ module.exports = {
   reconcileStuckReferrals,
   prepareClaim,
   claimReferral,
-  DAILY_CLAIM_CAP,
-  COOLDOWN_SECONDS,
 };

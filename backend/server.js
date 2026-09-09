@@ -62,6 +62,16 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// Same reasoning as /admin above — one more single-file page, same CSP
+// override, same adminAuth-on-every-API-call protection model.
+app.get('/analytics', (req, res) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  );
+  res.sendFile(path.join(__dirname, 'public', 'analytics.html'));
+});
+
 app.use('/assets', express.static(path.join(__dirname, 'public')));
 
 app.use('/api/spin', spinRoutes);
