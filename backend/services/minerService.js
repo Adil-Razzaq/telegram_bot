@@ -266,6 +266,26 @@ async function prepareClaim({ telegramId }) {
 
 async function claim({ telegramId, nonce }) {
   const settings = await getAllSettings();
+
+  // Consumed BEFORE opening the write transaction below — same
+  // reasoning and same placement as spinService.js's
+  // consumeAdEventIfRequired call: if the claim later fails (e.g. the
+  // cycle isn't actually complete yet), the ad view is "spent" either
+  // way — acceptable tradeoff, not exploitable, costs the user, not us.
+  //
+  // IMPORTANT: this must NOT run inside the tx below. consumeAdEvent
+  // does its own plain client.execute() UPDATE, which is a SEPARATE
+  // write from the interactive `tx` transaction — issuing it WHILE
+  // `tx` is open self-deadlocks on a single-writer database (`tx`
+  // holds the write lock and won't release it until this resolves,
+  // but this needs that same lock to run) and the request just hangs
+  // until it times out. (This was a real bug here until this fix —
+  // prepareStart/startCycle never had it because startCycle has no
+  // wrapping transaction at all; activateBoost never had it because
+  // its consumeAdEventIfRequired call is likewise placed before its
+  // own tx opens.)
+  await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim', settingKey: 'miner_claim_ads_enabled' });
+
   const tx = await client.transaction('write');
   try {
     await tx.execute({
@@ -290,12 +310,6 @@ async function claim({ telegramId, nonce }) {
       err.statusCode = 400;
       throw err;
     }
-
-    // See prepareClaim's comment above — its own independent toggle.
-    // Consumed inside the same transaction as the payout, same
-    // placement pattern as spinService.js's consumeAdEventIfRequired
-    // call.
-    await consumeAdEventIfRequired({ nonce, telegramId, action: 'miner_claim', settingKey: 'miner_claim_ads_enabled' });
 
     // Recomputed at claim time, inside the transaction — not trusted
     // from anything the client sent, so there's no way to claim more
