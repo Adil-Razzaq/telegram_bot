@@ -43,6 +43,12 @@ export default function Tasks({ onBalanceChange }) {
   const [config, setConfig] = useState(null);
   const [adWatchStatus, setAdWatchStatus] = useState(null);
   const [watchingNetwork, setWatchingNetwork] = useState(null);
+  // Two more fixed, admin-configurable Adsgram slots — fully
+  // independent of adWatchStatus above (own Block IDs, own daily
+  // limits). Hidden per-slot when that slot's Block ID is blank — see
+  // services/extraAdTaskService.js.
+  const [extraTaskStatus, setExtraTaskStatus] = useState(null);
+  const [watchingSlot, setWatchingSlot] = useState(null);
   // Purely cosmetic — counts down to the next UTC daily reset (when
   // watch limits refill), same "18:26:37" touch as the reference
   // design. Limits themselves reset server-side by calendar day
@@ -64,6 +70,15 @@ export default function Tasks({ onBalanceChange }) {
     }
   }
 
+  async function refreshExtraTasks() {
+    try {
+      const { status } = await api.extraAdTaskStatus();
+      setExtraTaskStatus(status);
+    } catch (e) {
+      // Non-fatal — the rest of Tasks still works if this fails.
+    }
+  }
+
   async function refresh() {
     try {
       const res = await api.taskList();
@@ -76,6 +91,7 @@ export default function Tasks({ onBalanceChange }) {
   useEffect(() => {
     refresh();
     refreshAdWatch();
+    refreshExtraTasks();
   }, []);
 
   function handleGo(task) {
@@ -139,6 +155,26 @@ export default function Tasks({ onBalanceChange }) {
       setError(e.message);
     } finally {
       setWatchingNetwork(null);
+    }
+  }
+
+  // The two extra Adsgram slots — same nonce -> show ad -> confirm
+  // pattern, but each uses its OWN dedicated block_id from
+  // extraTaskStatus (not config.adsgram_block_id — that one's reserved
+  // for spin/miner/referral/streak).
+  async function handleWatchExtraTask(slot) {
+    setWatchingSlot(slot);
+    setError(null);
+    try {
+      const { nonce } = await api.prepareExtraAdTask(slot);
+      if (nonce) await showAdsgramRewardedAd(extraTaskStatus[slot].block_id);
+      const result = await withConfirmationRetry(() => api.claimExtraAdTask(slot, nonce));
+      onBalanceChange(result.main_balance);
+      await refreshExtraTasks();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setWatchingSlot(null);
     }
   }
 
@@ -213,6 +249,50 @@ export default function Tasks({ onBalanceChange }) {
                 {watchingNetwork === 'monetag' ? '…' : adWatchStatus.monetag.can_watch ? 'WATCH' : 'DONE'}
               </button>
             </div>
+
+            {extraTaskStatus?.extra1.enabled && (
+              <div className="task-card">
+                <span className="task-icon watch-earn-icon-adsgram">
+                  <span className="material-symbols-outlined">smart_display</span>
+                </span>
+                <div className="task-info">
+                  <span className="task-title">Bonus Ad</span>
+                  <span className="task-reward">
+                    {extraTaskStatus.extra1.watched_today}/{extraTaskStatus.extra1.daily_limit}
+                    <span className="watch-earn-reward-pill">+{extraTaskStatus.extra1.reward_points}</span>
+                  </span>
+                </div>
+                <button
+                  className="task-button task-button-claim watch-earn-button"
+                  onClick={() => handleWatchExtraTask('extra1')}
+                  disabled={watchingSlot === 'extra1' || !extraTaskStatus.extra1.can_watch}
+                >
+                  {watchingSlot === 'extra1' ? '…' : extraTaskStatus.extra1.can_watch ? 'WATCH' : 'DONE'}
+                </button>
+              </div>
+            )}
+
+            {extraTaskStatus?.extra2.enabled && (
+              <div className="task-card">
+                <span className="task-icon watch-earn-icon-adsgram">
+                  <span className="material-symbols-outlined">smart_display</span>
+                </span>
+                <div className="task-info">
+                  <span className="task-title">Bonus Ad 2</span>
+                  <span className="task-reward">
+                    {extraTaskStatus.extra2.watched_today}/{extraTaskStatus.extra2.daily_limit}
+                    <span className="watch-earn-reward-pill">+{extraTaskStatus.extra2.reward_points}</span>
+                  </span>
+                </div>
+                <button
+                  className="task-button task-button-claim watch-earn-button"
+                  onClick={() => handleWatchExtraTask('extra2')}
+                  disabled={watchingSlot === 'extra2' || !extraTaskStatus.extra2.can_watch}
+                >
+                  {watchingSlot === 'extra2' ? '…' : extraTaskStatus.extra2.can_watch ? 'WATCH' : 'DONE'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

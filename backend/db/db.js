@@ -75,6 +75,18 @@ const COLUMNS_TO_ENSURE = [
   // telegramAuth.js. NULL/failed lookups show up as "Unknown" in the
   // country breakdown rather than blocking anything.
   { table: 'users', column: 'country', ddl: 'TEXT' },
+  // ADDED (referral-tier mining boost): denormalized counter, kept in
+  // sync inside referralService.js's maybeQualifyReferral (same
+  // transaction that sets referral_qualified=1 on the REFERRED user
+  // also increments this on the REFERRER). Avoids a COUNT(*) query on
+  // every mining rate calculation — see minerService.js's
+  // currentCyclePoints/computeReferralTierBoostPercent.
+  { table: 'users', column: 'qualified_referrals_count', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED (Invite Gift — viral growth feature): one-shot flag so the
+  // instant welcome-gift bonus (see services/inviteGiftService.js) can
+  // only ever be claimed once per new user, no matter how many times
+  // they revisit the Friends tab.
+  { table: 'users', column: 'invite_gift_claimed', ddl: 'INTEGER DEFAULT 0' },
 ];
 
 async function ensureColumn(table, column, ddl) {

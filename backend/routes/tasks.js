@@ -7,6 +7,11 @@ const {
   prepareReward: prepareTaskBannerReward,
   claimReward: claimTaskBannerReward,
 } = require('../services/taskBannerService');
+const {
+  getStatus: getExtraAdTaskStatus,
+  prepareWatch: prepareExtraAdTask,
+  claimWatch: claimExtraAdTask,
+} = require('../services/extraAdTaskService');
 
 const router = express.Router();
 
@@ -114,6 +119,38 @@ router.post('/task-banner/claim', telegramAuth, async (req, res) => {
   const { nonce } = req.body;
   try {
     const result = await claimTaskBannerReward({ telegramId: req.telegramUser.id, nonce });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Two more fixed, admin-configurable Adsgram task-tab slots ('extra1'
+// / 'extra2') — see services/extraAdTaskService.js.
+
+router.get('/extra-ad-task/status', telegramAuth, async (req, res) => {
+  try {
+    const status = await getExtraAdTaskStatus({ telegramId: req.telegramUser.id });
+    res.json({ ok: true, status });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/extra-ad-task/prepare', telegramAuth, async (req, res) => {
+  const { slot } = req.body;
+  try {
+    const nonce = await prepareExtraAdTask({ telegramId: req.telegramUser.id, slot });
+    res.json({ ok: true, nonce });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/extra-ad-task/claim', telegramAuth, async (req, res) => {
+  const { slot, nonce } = req.body;
+  try {
+    const result = await claimExtraAdTask({ telegramId: req.telegramUser.id, slot, nonce });
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });

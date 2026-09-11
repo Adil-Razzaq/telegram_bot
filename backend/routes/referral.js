@@ -1,6 +1,7 @@
 const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
 const { prepareClaim, claimReferral, grantReferral } = require('../services/referralService');
+const inviteGiftService = require('../services/inviteGiftService');
 const { client } = require('../db/db');
 const { getSetting } = require('../utils/settings');
 
@@ -135,6 +136,36 @@ router.get('/invited', telegramAuth, async (req, res) => {
     res.json({ ok: true, invited: res_.rows, referral_qualify_miner_cycles: requiredCycles });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Invite Gift (viral growth feature) — see services/inviteGiftService.js ---
+
+router.get('/invite-gift/status', telegramAuth, async (req, res) => {
+  try {
+    const status = await inviteGiftService.getStatus({ telegramId: req.telegramUser.id });
+    res.json({ ok: true, status });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/invite-gift/prepare', telegramAuth, async (req, res) => {
+  try {
+    const nonce = await inviteGiftService.prepareClaim({ telegramId: req.telegramUser.id });
+    res.json({ ok: true, nonce });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/invite-gift/claim', telegramAuth, async (req, res) => {
+  const { nonce } = req.body;
+  try {
+    const result = await inviteGiftService.claimGift({ telegramId: req.telegramUser.id, nonce });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
 });
 

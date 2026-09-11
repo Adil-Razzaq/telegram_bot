@@ -191,6 +191,14 @@ async function maybeQualifyReferral(referredTelegramId) {
         sql: 'UPDATE users SET pending_referral_balance = pending_referral_balance + ? WHERE telegram_id = ?',
         args: [referralReward, locked.referred_by],
       });
+      // Referral-tier mining boost (see minerService.js) reads this
+      // counter — kept in sync here, same transaction as the
+      // qualification itself, so it can never drift out of step with
+      // referral_qualified.
+      await tx.execute({
+        sql: 'UPDATE users SET qualified_referrals_count = qualified_referrals_count + 1 WHERE telegram_id = ?',
+        args: [locked.referred_by],
+      });
       await tx.execute({
         sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
         args: [locked.referred_by, 'referral_grant', referralReward, JSON.stringify({ referredTelegramId, qualified: true })],

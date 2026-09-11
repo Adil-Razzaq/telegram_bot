@@ -228,6 +228,22 @@ CREATE TABLE IF NOT EXISTS daily_task_banner_state (
     PRIMARY KEY (telegram_id, watch_date)
 );
 
+-- ADDED: two more fixed, admin-configurable Adsgram task-tab slots,
+-- each with its OWN Block ID and reward (see settings.js's
+-- adsgram_extra_task1_*/adsgram_extra_task2_* settings, and
+-- services/extraAdTaskService.js). A SEPARATE table from
+-- daily_ad_watch_state above for the same reason as
+-- daily_task_banner_state: that table's `network` column has a CHECK
+-- constraint baked into any already-deployed database, and SQLite
+-- can't ALTER a CHECK constraint on an existing table.
+CREATE TABLE IF NOT EXISTS daily_extra_ad_task_state (
+    telegram_id INTEGER NOT NULL,
+    slot TEXT NOT NULL CHECK(slot IN ('extra1', 'extra2')),
+    watch_date TEXT NOT NULL, -- 'YYYY-MM-DD', UTC calendar day
+    watch_count INTEGER DEFAULT 0,
+    PRIMARY KEY (telegram_id, slot, watch_date)
+);
+
 -- ADDED: 7-day login/watch-ad streak (Leaderboard & Streak tab). One
 -- row per user; streak_day is which day they last COMPLETED (1-7,
 -- wraps back to 1 after 7), last_claim_date is the UTC calendar day of

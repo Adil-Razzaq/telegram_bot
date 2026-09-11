@@ -26,6 +26,42 @@ const SETTING_DEFS = {
   // server-side.
   referral_daily_claim_cap: { type: 'number', default: 20, min: 1 },
   referral_claim_cooldown_seconds: { type: 'number', default: 60, min: 0 },
+  // --- Referral-tier mining boost ---
+  // Once a user's OWN qualified_referrals_count (users table — kept in
+  // sync in referralService.js's maybeQualifyReferral) reaches a
+  // tier's *_count, their mining cycle's base point target is
+  // increased by that tier's *_boost_percent — see minerService.js's
+  // currentCyclePoints/computeReferralTierBoostPercent. NOT cumulative
+  // across tiers — only the HIGHEST tier the user currently qualifies
+  // for applies. Setting a tier's *_count to 0 disables that tier
+  // entirely (it's never matched). Live-computed on every calculation,
+  // same as every other mining setting here — not locked in per cycle,
+  // so hitting a new tier takes effect on the very next accrual tick,
+  // not just future cycles.
+  referral_tier1_count: { type: 'number', default: 5, min: 0 },
+  referral_tier1_boost_percent: { type: 'number', default: 5, min: 0 },
+  referral_tier2_count: { type: 'number', default: 15, min: 0 },
+  referral_tier2_boost_percent: { type: 'number', default: 10, min: 0 },
+  referral_tier3_count: { type: 'number', default: 30, min: 0 },
+  referral_tier3_boost_percent: { type: 'number', default: 20, min: 0 },
+
+  // --- Invite Gift (viral growth feature) ---
+  // A ONE-TIME, instant, ad-funded welcome bonus shown to a NEW user
+  // the moment they open the app via someone's referral link (i.e. as
+  // soon as users.referred_by is set — see referralService.js's
+  // grantReferral), completely separate from the slower referral_reward
+  // bonus (which still requires referral_qualify_miner_cycles cycles
+  // before the REFERRER gets paid). This one pays BOTH sides instantly
+  // the moment the new user watches a single Adsgram ad — the new user
+  // gets an immediate "why not try this app" payoff (drives real invite
+  // link clicks into actual opens), and the referrer gets an instant
+  // "your invite worked" moment (drives more sharing) — while the ad
+  // view itself is the direct Adsgram revenue tied to every successful
+  // invite. See services/inviteGiftService.js. Hidden entirely (no
+  // welcome-gift card shown to anyone) while the Block ID is blank.
+  invite_gift_adsgram_block_id: { type: 'string', default: '' },
+  invite_gift_new_user_points: { type: 'number', default: 200, min: 0 },
+  invite_gift_referrer_points: { type: 'number', default: 100, min: 0 },
   miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
   miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
   miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js
@@ -121,6 +157,21 @@ const SETTING_DEFS = {
   adsgram_task_banner_block_id: { type: 'string', default: 'task-46328' },
   adsgram_task_banner_reward_points: { type: 'number', default: 20, min: 0 },
   adsgram_task_banner_daily_limit: { type: 'number', default: 5, min: 0 },
+
+  // --- Two more fixed, admin-configurable Adsgram task-tab slots ---
+  // Each fully independent: its own Rewarded Adsgram Block ID, its own
+  // fixed point reward, its own daily limit — same Rewarded/show()
+  // format as adsgram_block_id above (NOT the Task-banner format), but
+  // with a DEDICATED block instead of sharing the one used for spin/
+  // miner/referral. A slot with a blank Block ID is hidden entirely in
+  // the Tasks tab (see components/Tasks.jsx) — leave it blank until
+  // you're ready to turn a slot on. See services/extraAdTaskService.js.
+  adsgram_extra_task1_block_id: { type: 'string', default: '' },
+  adsgram_extra_task1_reward_points: { type: 'number', default: 20, min: 0 },
+  adsgram_extra_task1_daily_limit: { type: 'number', default: 3, min: 0 },
+  adsgram_extra_task2_block_id: { type: 'string', default: '' },
+  adsgram_extra_task2_reward_points: { type: 'number', default: 20, min: 0 },
+  adsgram_extra_task2_daily_limit: { type: 'number', default: 3, min: 0 },
 
   // Optional platform fee on withdrawals — both 0 means off (the
   // default; payout equals face value exactly like before this
