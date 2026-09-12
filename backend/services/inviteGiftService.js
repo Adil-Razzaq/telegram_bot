@@ -16,7 +16,11 @@ async function getStatus({ telegramId }) {
   const [settings, userRes] = await Promise.all([
     getAllSettings(),
     client.execute({
-      sql: 'SELECT referred_by, invite_gift_claimed FROM users WHERE telegram_id = ?',
+      sql: `SELECT users.referred_by, users.invite_gift_claimed,
+                   referrer.telegram_id AS referrer_telegram_id, referrer.username AS referrer_username
+            FROM users
+            LEFT JOIN users AS referrer ON referrer.telegram_id = users.referred_by
+            WHERE users.telegram_id = ?`,
       args: [telegramId],
     }),
   ]);
@@ -29,6 +33,11 @@ async function getStatus({ telegramId }) {
     block_id: settings.invite_gift_adsgram_block_id,
     new_user_points: settings.invite_gift_new_user_points,
     referrer_points: settings.invite_gift_referrer_points,
+    // For the app-open popup: "You were invited by @username" (falls
+    // back to a plain Telegram ID if the referrer has no username set
+    // — not everyone does).
+    referrer_telegram_id: user?.referrer_telegram_id ?? null,
+    referrer_username: user?.referrer_username ?? null,
   };
 }
 

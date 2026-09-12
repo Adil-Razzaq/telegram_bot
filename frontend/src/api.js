@@ -66,6 +66,7 @@ export const api = {
   inviteGiftStatus: () => apiCall('/referral/invite-gift/status'),
   prepareInviteGift: () => apiCall('/referral/invite-gift/prepare', { method: 'POST' }),
   claimInviteGift: (nonce) => apiCall('/referral/invite-gift/claim', { method: 'POST', body: { nonce } }),
+  channelGateStatus: () => apiCall('/user/channel-gate-status'),
   streakStatus: () => apiCall('/streak/status'),
   prepareStreakClaim: () => apiCall('/streak/prepare-claim', { method: 'POST' }),
   claimStreak: (nonce) => apiCall('/streak/claim', { method: 'POST', body: { nonce } }),

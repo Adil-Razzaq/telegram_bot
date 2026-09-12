@@ -60,46 +60,21 @@ async function getRow(telegramId) {
   await ensureMinerRow(telegramId);
   await rolloverMinerCyclesIfNeeded(telegramId);
   const res = await client.execute({
-    sql: `SELECT miner_state.status, miner_state.cycle_started_at, miner_state.cycle_ends_at,
-                 miner_state.cycles_completed_today, miner_state.cycles_reset_date,
-                 miner_state.boost_expires_at, miner_state.boost_bonus_banked,
-                 users.qualified_referrals_count
-          FROM miner_state
-          LEFT JOIN users ON users.telegram_id = miner_state.telegram_id
-          WHERE miner_state.telegram_id = ?`,
+    sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today, cycles_reset_date,
+                 boost_expires_at, boost_bonus_banked
+          FROM miner_state WHERE telegram_id = ?`,
     args: [telegramId],
   });
   return res.rows[0];
 }
 
-// Highest tier the user's qualified_referrals_count currently meets —
-// NOT cumulative, only ever one tier's percent applies. A tier with
-// *_count = 0 is treated as disabled (never matched, even though
-// count >= 0 is technically always true). See settings.js for the
-// full design note.
-function computeReferralTierBoostPercent(qualifiedReferralsCount, settings) {
-  const tiers = [
-    { count: settings.referral_tier1_count, percent: settings.referral_tier1_boost_percent },
-    { count: settings.referral_tier2_count, percent: settings.referral_tier2_boost_percent },
-    { count: settings.referral_tier3_count, percent: settings.referral_tier3_boost_percent },
-  ].filter((t) => t.count > 0);
-
-  let best = 0;
-  for (const tier of tiers) {
-    if (qualifiedReferralsCount >= tier.count && tier.percent > best) best = tier.percent;
-  }
-  return best;
-}
-
-// The base (unboosted-by-ad-boost) target for this cycle — the ad
-// "Boost" feature no longer touches this at all, it only affects the
-// RATE via boostBonusPoints below. The referral-tier boost DOES apply
-// here, since it's meant to be a standing increase to the cycle's own
-// target, not a temporary rate multiplier like the ad boost.
+// The base (unboosted) target for this cycle — the ad "Boost" feature
+// is the ONLY thing that increases mining, via boostBonusPoints below
+// (a temporary rate multiplier, miner_boost_multiplier — default 3x —
+// for miner_boost_duration_minutes after watching an ad). There is no
+// other standing multiplier here by design.
 function currentCyclePoints(row, settings) {
-  const base = pointsForCycleIndex(row.cycles_completed_today, settings.miner_daily_points, settings.miner_cycles_per_day);
-  const tierPercent = computeReferralTierBoostPercent(row.qualified_referrals_count || 0, settings);
-  return tierPercent > 0 ? base * (1 + tierPercent / 100) : base;
+  return pointsForCycleIndex(row.cycles_completed_today, settings.miner_daily_points, settings.miner_cycles_per_day);
 }
 
 function cycleTotalSeconds(row) {
@@ -201,10 +176,6 @@ async function getStatus({ telegramId }) {
     cycle_hours: settings.miner_cycle_hours,
     current_cycle_points: row.status === 'running' ? cyclePoints : 0,
     rate_per_second: effectiveRate,
-    // Percent currently added to current_cycle_points/rate_per_second
-    // from the referral-tier system (0 if no tier is met) — purely
-    // informational, already baked into the numbers above.
-    referral_tier_boost_percent: computeReferralTierBoostPercent(row.qualified_referrals_count || 0, settings),
     accrued_now: accruedNow(row, settings),
     // Unfloored — lets the frontend's live counter climb smoothly and
     // reflect boosted earnings past the base cycle target instead of
@@ -325,12 +296,9 @@ async function claim({ telegramId, nonce }) {
       args: [telegramId],
     });
     const rowRes = await tx.execute({
-      sql: `SELECT miner_state.status, miner_state.cycle_started_at, miner_state.cycle_ends_at,
-                   miner_state.cycles_completed_today, miner_state.boost_expires_at,
-                   miner_state.boost_bonus_banked, users.qualified_referrals_count
-            FROM miner_state
-            LEFT JOIN users ON users.telegram_id = miner_state.telegram_id
-            WHERE miner_state.telegram_id = ?`,
+      sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today,
+                   boost_expires_at, boost_bonus_banked
+            FROM miner_state WHERE telegram_id = ?`,
       args: [telegramId],
     });
     const row = rowRes.rows[0];
@@ -425,12 +393,9 @@ async function activateBoost({ telegramId, nonce }) {
   const tx = await client.transaction('write');
   try {
     const rowRes = await tx.execute({
-      sql: `SELECT miner_state.status, miner_state.cycle_started_at, miner_state.cycle_ends_at,
-                   miner_state.cycles_completed_today, miner_state.boost_expires_at,
-                   miner_state.boost_bonus_banked, users.qualified_referrals_count
-            FROM miner_state
-            LEFT JOIN users ON users.telegram_id = miner_state.telegram_id
-            WHERE miner_state.telegram_id = ?`,
+      sql: `SELECT status, cycle_started_at, cycle_ends_at, cycles_completed_today,
+                   boost_expires_at, boost_bonus_banked
+            FROM miner_state WHERE telegram_id = ?`,
       args: [telegramId],
     });
     const row = rowRes.rows[0];

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { withConfirmationRetry } from '../monetag';
 import { showActionAd } from '../adNetwork';
-import { showAdsgramRewardedAd } from '../adsgram';
 
 function timeAgo(iso) {
   const seconds = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000);
@@ -31,12 +30,8 @@ export default function Friends({ telegramId, onBalanceChange }) {
   // state) so refreshStatus/handleClaim always read the latest value
   // without needing to be redeclared as a dependency of either.
   const cooldownSecondsRef = useRef(60);
-  // Invite Gift — one-time, ad-funded welcome bonus for a NEW user who
-  // opened via a referral link (see services/inviteGiftService.js).
-  // null while loading, then either { eligible: false } or the full
-  // status object once fetched.
-  const [inviteGift, setInviteGift] = useState(null);
-  const [claimingGift, setClaimingGift] = useState(false);
+  // Invite Gift now shows as an app-open popup instead (see
+  // WelcomeGiftModal.jsx) — only the Share/Copy link stuff stays here.
   const [shared, setShared] = useState(false);
 
   const botUsername = import.meta.env?.VITE_BOT_USERNAME;
@@ -73,7 +68,6 @@ export default function Friends({ telegramId, onBalanceChange }) {
         }
       })
       .catch(() => {});
-    api.inviteGiftStatus().then((r) => setInviteGift(r.status)).catch(() => setInviteGift({ eligible: false }));
   }, [refreshStatus]);
 
   useEffect(() => {
@@ -131,22 +125,6 @@ export default function Friends({ telegramId, onBalanceChange }) {
     setTimeout(() => setShared(false), 2000);
   }
 
-  async function handleClaimGift() {
-    setError(null);
-    setClaimingGift(true);
-    try {
-      const { nonce } = await api.prepareInviteGift();
-      await showAdsgramRewardedAd(inviteGift.block_id);
-      const result = await withConfirmationRetry(() => api.claimInviteGift(nonce));
-      onBalanceChange(result.main_balance);
-      setInviteGift({ eligible: false });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setClaimingGift(false);
-    }
-  }
-
   if (!status) {
     return <div className="friends-container">Loading…</div>;
   }
@@ -162,43 +140,31 @@ export default function Friends({ telegramId, onBalanceChange }) {
       <h2 className="page-title">Friends</h2>
       <p className="page-subtitle">Invite friends to boost mining speed!</p>
 
-      {/* Shown ONLY to a NEW user who opened via someone's referral
-          link and hasn't claimed this yet — see
-          services/inviteGiftService.js. Separate from and in addition
-          to the Referral Reward card below (that one pays the
-          REFERRER once cycles are done; this one pays BOTH sides
-          instantly, funded by a single ad view). */}
-      {inviteGift?.eligible && (
-        <div className="glass-card" style={{ background: 'rgba(250,204,21,0.12)', borderColor: 'rgba(250,204,21,0.3)' }}>
-          <span className="glass-card-icon round" style={{ background: 'rgba(250,204,21,0.18)', color: '#facc15' }}>
-            🎉
-          </span>
-          <div className="glass-card-body">
-            <p className="glass-card-title">Welcome Gift</p>
-            <p className="glass-card-subtitle">
-              Watch one ad to claim +{inviteGift.new_user_points} ADLX — your friend gets +{inviteGift.referrer_points} too!
-            </p>
+      {/* Redesigned: the plain glass-card layout (icon + short subtitle +
+          inline buttons) doesn't fit a full URL well — it wraps badly and
+          crowds the buttons. This gets its own layout: link shown in a
+          full-width monospace box, two full-width action buttons below. */}
+      <div className="invite-link-card">
+        <div className="invite-link-card-header">
+          <span className="invite-link-icon">🔗</span>
+          <div>
+            <p className="invite-link-title">Your Invite Link</p>
+            <p className="invite-link-caption">Share it — earn when friends join</p>
           </div>
-          <button className="gold-button" onClick={handleClaimGift} disabled={claimingGift}>
-            {claimingGift ? '…' : 'Claim'}
+        </div>
+        <div className="invite-link-box">
+          <span className="invite-link-text">{refLink || 'Link unavailable — contact support'}</span>
+        </div>
+        <div className="invite-link-actions">
+          <button className="invite-link-button invite-link-button-primary" onClick={shareLink} disabled={!refLink}>
+            <span className="material-symbols-outlined">ios_share</span>
+            {shared ? 'Shared!' : 'Share'}
+          </button>
+          <button className="invite-link-button invite-link-button-secondary" onClick={copyLink} disabled={!refLink}>
+            <span className="material-symbols-outlined">content_copy</span>
+            {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
-      )}
-
-      <div className="glass-card">
-        <span className="glass-card-icon round">🔗</span>
-        <div className="glass-card-body">
-          <p className="glass-card-title">Your Invite Link</p>
-          <p className="glass-card-subtitle">
-            {refLink || 'Link unavailable — contact support'}
-          </p>
-        </div>
-        <button className="gold-button" onClick={shareLink} disabled={!refLink} style={{ marginRight: 6 }}>
-          {shared ? 'Shared' : 'Share'}
-        </button>
-        <button className="gold-button" onClick={copyLink} disabled={!refLink}>
-          {copied ? 'Copied' : 'Copy'}
-        </button>
       </div>
 
       <div className="glass-card">

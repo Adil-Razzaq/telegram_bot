@@ -26,24 +26,6 @@ const SETTING_DEFS = {
   // server-side.
   referral_daily_claim_cap: { type: 'number', default: 20, min: 1 },
   referral_claim_cooldown_seconds: { type: 'number', default: 60, min: 0 },
-  // --- Referral-tier mining boost ---
-  // Once a user's OWN qualified_referrals_count (users table — kept in
-  // sync in referralService.js's maybeQualifyReferral) reaches a
-  // tier's *_count, their mining cycle's base point target is
-  // increased by that tier's *_boost_percent — see minerService.js's
-  // currentCyclePoints/computeReferralTierBoostPercent. NOT cumulative
-  // across tiers — only the HIGHEST tier the user currently qualifies
-  // for applies. Setting a tier's *_count to 0 disables that tier
-  // entirely (it's never matched). Live-computed on every calculation,
-  // same as every other mining setting here — not locked in per cycle,
-  // so hitting a new tier takes effect on the very next accrual tick,
-  // not just future cycles.
-  referral_tier1_count: { type: 'number', default: 5, min: 0 },
-  referral_tier1_boost_percent: { type: 'number', default: 5, min: 0 },
-  referral_tier2_count: { type: 'number', default: 15, min: 0 },
-  referral_tier2_boost_percent: { type: 'number', default: 10, min: 0 },
-  referral_tier3_count: { type: 'number', default: 30, min: 0 },
-  referral_tier3_boost_percent: { type: 'number', default: 20, min: 0 },
 
   // --- Invite Gift (viral growth feature) ---
   // A ONE-TIME, instant, ad-funded welcome bonus shown to a NEW user
@@ -249,6 +231,14 @@ const SETTING_DEFS = {
   // withdrawal. Default off; if official_channels is empty this has no
   // effect even when true.
   withdrawal_require_channel_join: { type: 'boolean', default: false },
+  // Hard gate on the app itself, checked on every app open — blocks
+  // ALL use of the app (not just withdrawal/referral) until every
+  // channel in official_channels is joined. Independent of the two
+  // settings above — you can have any combination of the three on.
+  // Default off; if official_channels is empty this has no effect even
+  // when true (same fail-open behavior as the other two — see
+  // taskService.js's checkOfficialChannelsMembership).
+  app_open_require_channel_join: { type: 'boolean', default: false },
 };
 
 // Flat key -> default value, kept for backward compatibility with code

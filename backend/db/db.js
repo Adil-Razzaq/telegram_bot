@@ -81,6 +81,10 @@ const COLUMNS_TO_ENSURE = [
   // also increments this on the REFERRER). Avoids a COUNT(*) query on
   // every mining rate calculation — see minerService.js's
   // currentCyclePoints/computeReferralTierBoostPercent.
+  // qualified_referrals_count previously fed a referral-tier mining
+  // boost that was removed — column left in place (harmless, unused)
+  // rather than dropped, since SQLite can't drop a column without a
+  // full table rebuild.
   { table: 'users', column: 'qualified_referrals_count', ddl: 'INTEGER DEFAULT 0' },
   // ADDED (Invite Gift — viral growth feature): one-shot flag so the
   // instant welcome-gift bonus (see services/inviteGiftService.js) can

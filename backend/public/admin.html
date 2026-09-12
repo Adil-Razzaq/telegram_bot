@@ -41,6 +41,31 @@
   .withdrawal-meta { font-family: monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
   #keyGate { text-align: center; margin-top: 60px; }
   #app { display: none; }
+.settings-section {
+  border: 1px solid #262e40;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.settings-section summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 600;
+  font-size: 13.5px;
+  background: #1b2130;
+  list-style: none;
+}
+.settings-section summary::-webkit-details-marker { display: none; }
+.settings-section summary::before {
+  content: '▸ ';
+  color: #e8a33d;
+}
+.settings-section[open] summary::before {
+  content: '▾ ';
+}
+.settings-section-body {
+  padding: 14px;
+}
 </style>
 </head>
 <body>
@@ -123,7 +148,7 @@
 
   <h2>Settings</h2>
   <div class="card">
-    <p class="muted">Every admin-tunable value in the app. Changes take effect within ~15 seconds, no deploy needed.</p>
+    <p class="muted">Every admin-tunable value in the app, grouped by section. Changes take effect within ~15 seconds, no deploy needed.</p>
     <div id="settingsFields">Loading…</div>
     <button onclick="saveSettings()" style="margin-top:8px">Save Settings</button>
     <div id="settingsStatus" class="status-msg"></div>
@@ -144,6 +169,7 @@
       Monetag's Postback URL (set per-zone in their dashboard) is unaffected by anything on this page.
     </p>
   </div>
+
 
   <h2>Feature Flags</h2>
   <div class="card">
@@ -396,15 +422,14 @@
 
   const SETTINGS_LABELS = {
     points_per_usd: 'Points per $1',
+    official_channels: 'Official channels (comma-separated, e.g. @channel1,@channel2)',
+    app_open_require_channel_join: 'Hard gate: block the whole app until official channels are joined',
+    referral_require_channel_join: 'Require official channels joined before referral credit',
+    withdrawal_require_channel_join: 'Require official channels joined before withdrawal',
+    referral_qualify_miner_cycles: 'Referral qualifies after this many mining cycles (0 = instant)',
     referral_reward: 'Referral reward (points/claim)',
     referral_daily_claim_cap: 'Referral: max claims per day (server-enforced)',
     referral_claim_cooldown_seconds: 'Referral: cooldown after a claim, seconds (UI only)',
-    referral_tier1_count: 'Referral tier 1: qualified referrals needed (0 = disabled)',
-    referral_tier1_boost_percent: 'Referral tier 1: mining cycle boost %',
-    referral_tier2_count: 'Referral tier 2: qualified referrals needed (0 = disabled)',
-    referral_tier2_boost_percent: 'Referral tier 2: mining cycle boost %',
-    referral_tier3_count: 'Referral tier 3: qualified referrals needed (0 = disabled)',
-    referral_tier3_boost_percent: 'Referral tier 3: mining cycle boost %',
     invite_gift_adsgram_block_id: 'Invite Gift: Adsgram Block ID (blank = feature hidden)',
     invite_gift_new_user_points: 'Invite Gift: bonus for the NEW user',
     invite_gift_referrer_points: 'Invite Gift: bonus for the REFERRER',
@@ -468,6 +493,26 @@
     streak_ad_network: 'Streak: ad network',
   };
 
+  // Groups every setting key above into a labeled, collapsible section
+  // instead of one long flat list. Every key from SETTING_DEFS MUST
+  // appear in exactly one of these arrays — any key that doesn't gets
+  // caught by the "Other" fallback in loadSettings() below (a safety
+  // net, not an intended state — if you add a new setting, add it
+  // here too, in whichever section makes sense).
+  const SETTINGS_CATEGORIES = {
+    'General & Anti-Abuse': ['points_per_usd', 'official_channels', 'app_open_require_channel_join', 'referral_require_channel_join', 'withdrawal_require_channel_join', 'referral_qualify_miner_cycles'],
+    'Spin': ['spin_entry_fee', 'spin_free_spins', 'spin_payout_1', 'spin_payout_2', 'spin_payout_3', 'spin_payout_4', 'spin_payout_5', 'spin_payout_6', 'spin_ads_enabled'],
+    'Miner': ['miner_daily_points', 'miner_cycles_per_day', 'miner_cycle_hours', 'miner_boost_multiplier', 'miner_boost_duration_minutes', 'miner_start_ads_enabled', 'miner_claim_ads_enabled', 'miner_boost_ads_enabled'],
+    'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled'],
+    'Invite Gift': ['invite_gift_adsgram_block_id', 'invite_gift_new_user_points', 'invite_gift_referrer_points'],
+    'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled'],
+    'Withdrawals': ['withdrawal_fee_flat_points', 'withdrawal_fee_percent', 'min_withdrawal_points', 'withdrawal_ads_enabled', 'live_payouts_compact_mode', 'payout_channel_url'],
+    'Ads — Reward Actions (Spin/Miner/Referral)': ['action_ads_enabled', 'action_ads_network'],
+    'Ads — Passive / Auto': ['auto_ad_enabled', 'auto_ad_first_enabled', 'auto_ad_network', 'auto_ad_first_delay_seconds', 'auto_ad_interval_seconds', 'auto_ad_frequency', 'auto_ad_capping_hours'],
+    'Ads — Monetag': ['monetag_zone_id', 'monetag_task_reward_percent'],
+    'Ads — Adsgram': ['adsgram_block_id', 'adsgram_interstitial_block_id', 'adsgram_task_reward_points', 'watch_ad_daily_limit_monetag', 'watch_ad_daily_limit_adsgram', 'adsgram_task_banner_block_id', 'adsgram_task_banner_reward_points', 'adsgram_task_banner_daily_limit', 'adsgram_extra_task1_block_id', 'adsgram_extra_task1_reward_points', 'adsgram_extra_task1_daily_limit', 'adsgram_extra_task2_block_id', 'adsgram_extra_task2_reward_points', 'adsgram_extra_task2_daily_limit'],
+  };
+
   let lastSettingDefs = {}; // populated by loadSettings, read by saveSettings
 
   function renderSettingInput(key, def, value) {
@@ -495,7 +540,31 @@
     try {
       const { settings, known_keys, setting_defs } = await adminFetch('/admin/settings');
       lastSettingDefs = setting_defs;
-      el.innerHTML = known_keys.map((key) => renderSettingInput(key, setting_defs[key], settings[key])).join('');
+
+      // Every key goes into whichever SETTINGS_CATEGORIES section lists
+      // it; any key that isn't in ANY section (shouldn't happen — see
+      // the comment above SETTINGS_CATEGORIES) falls into "Other" so it
+      // never silently disappears from the page.
+      const categorized = new Set();
+      Object.values(SETTINGS_CATEGORIES).forEach((keys) => keys.forEach((k) => categorized.add(k)));
+      const leftover = known_keys.filter((k) => !categorized.has(k));
+      const sections = { ...SETTINGS_CATEGORIES };
+      if (leftover.length > 0) sections['Other'] = leftover;
+
+      el.innerHTML = Object.entries(sections)
+        .map(([title, keys]) => {
+          const fields = keys
+            .filter((key) => setting_defs[key]) // skip any stale/removed key gracefully
+            .map((key) => `<div style="margin-bottom:12px">${renderSettingInput(key, setting_defs[key], settings[key])}</div>`)
+            .join('');
+          return `
+            <details class="settings-section" open>
+              <summary>${title}</summary>
+              <div class="settings-section-body">${fields}</div>
+            </details>
+          `;
+        })
+        .join('');
     } catch (e) {
       el.innerHTML = `<p class="status-msg err">${e.message}</p>`;
     }

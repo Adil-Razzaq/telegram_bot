@@ -336,6 +336,7 @@ module.exports = {
   deleteTask,
   isChannelMember,
   checkOfficialChannelsMembership,
+  normalizeChannelId,
   prepareAdTask,
   claimAdTask,
 };
