@@ -2,6 +2,7 @@ const express = require('express');
 const { telegramAuth } = require('../middleware/telegramAuth');
 const { prepareClaim, claimReferral, grantReferral } = require('../services/referralService');
 const inviteGiftService = require('../services/inviteGiftService');
+const { preparePhotoShare } = require('../services/preparedShareService');
 const { client } = require('../db/db');
 const { getSetting } = require('../utils/settings');
 
@@ -166,6 +167,58 @@ router.post('/invite-gift/claim', telegramAuth, async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Image-based share (see services/preparedShareService.js). Body: { refLink }.
+router.post('/prepared-share', telegramAuth, async (req, res) => {
+  const { refLink } = req.body;
+  try {
+    const result = await preparePhotoShare({ telegramId: req.telegramUser.id, refLink });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- "X joined your network" referrer popup ---
+// Shown to the REFERRER (not the new user — that's WelcomeGiftModal's
+// job) the next time THEY open the app after someone joins via their
+// link. referral_notified lives on the REFERRED user's row, so it's
+// per-referral, not per-referrer — multiple pending joins all surface
+// together in one popup instead of one popup per friend.
+
+router.get('/new-joins', telegramAuth, async (req, res) => {
+  try {
+    const [result, title, messageTemplate] = await Promise.all([
+      client.execute({
+        sql: `SELECT telegram_id, username, first_name FROM users
+              WHERE referred_by = ? AND referral_notified = 0
+              ORDER BY created_at ASC`,
+        args: [req.telegramUser.id],
+      }),
+      getSetting('referral_join_popup_title'),
+      getSetting('referral_join_popup_message'),
+    ]);
+    const joins = result.rows.map((r) => ({
+      telegram_id: r.telegram_id,
+      name: r.first_name || (r.username ? `@${r.username}` : `User ${r.telegram_id}`),
+    }));
+    res.json({ ok: true, joins, title, message_template: messageTemplate });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/new-joins/ack', telegramAuth, async (req, res) => {
+  try {
+    await client.execute({
+      sql: `UPDATE users SET referral_notified = 1 WHERE referred_by = ? AND referral_notified = 0`,
+      args: [req.telegramUser.id],
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

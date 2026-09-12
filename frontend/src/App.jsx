@@ -7,7 +7,9 @@ import Wallet from './components/Wallet';
 import Leaderboard from './components/Leaderboard';
 import AutoAds from './components/AutoAds';
 import WelcomeGiftModal from './components/WelcomeGiftModal';
+import NewReferralPopup from './components/NewReferralPopup';
 import ChannelGate from './components/ChannelGate';
+import DeviceRestrictionGate from './components/DeviceRestrictionGate';
 import { api } from './api';
 import { initMonetag } from './monetag';
 import { initTonConnectAutoConnect, connectTonWallet, disconnectTonWallet } from './tonConnect';
@@ -132,10 +134,12 @@ export default function App() {
   };
 
   return (
+    <DeviceRestrictionGate>
     <ChannelGate>
     <div className="app">
       <AutoAds config={config} />
       {telegramId && <WelcomeGiftModal onBalanceChange={setMainBalance} />}
+      {telegramId && <NewReferralPopup />}
       <main className="app-main">
         {/* Miner is ALWAYS mounted (not conditionally rendered like the
             other tabs) — it holds live-ticking, poll-driven state
@@ -202,5 +206,6 @@ export default function App() {
       </nav>
     </div>
     </ChannelGate>
+    </DeviceRestrictionGate>
   );
 }

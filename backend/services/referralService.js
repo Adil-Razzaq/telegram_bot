@@ -49,12 +49,25 @@ async function grantReferral({ referrerId, referredTelegramId }) {
     });
 
     const referredRes = await tx.execute({
-      sql: 'SELECT referred_by FROM users WHERE telegram_id = ?',
+      sql: 'SELECT referred_by, multi_account_flagged FROM users WHERE telegram_id = ?',
       args: [referredTelegramId],
     });
     if (referredRes.rows[0].referred_by) {
       const err = new Error('This user has already been credited to a referrer');
       err.statusCode = 409;
+      throw err;
+    }
+    if (referredRes.rows[0].multi_account_flagged) {
+      // One-device-one-account (best-effort — see db.js's comment on
+      // users.device_id): this account's device was already associated
+      // with a different Telegram account at signup, so it's treated
+      // as a likely multi-account and gets no referral credit. The
+      // referred user can still use the app normally — this only
+      // blocks THIS specific reward path, and the linkage never
+      // happens, so Invite Gift stays ineligible for them too (it
+      // requires referred_by to be set).
+      const err = new Error('This account is not eligible for referral credit');
+      err.statusCode = 403;
       throw err;
     }
 

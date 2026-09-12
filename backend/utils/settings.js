@@ -44,6 +44,43 @@ const SETTING_DEFS = {
   invite_gift_adsgram_block_id: { type: 'string', default: '' },
   invite_gift_new_user_points: { type: 'number', default: 200, min: 0 },
   invite_gift_referrer_points: { type: 'number', default: 100, min: 0 },
+
+  // --- Image-based Telegram share (viral growth) ---
+  // A publicly reachable HTTPS image URL used as the banner for a rich,
+  // photo-attached share via Telegram's savePreparedInlineMessage +
+  // Telegram.WebApp.shareMessage() (Bot API 7.10+) — see
+  // services/preparedShareService.js. Blank = feature hidden; the
+  // frontend falls back to the plain-link share (Telegram's
+  // t.me/share/url, no custom image) it already has either way, so
+  // this is purely an enhancement, never a requirement.
+  invite_share_banner_image_url: { type: 'string', default: '' },
+
+  // --- Editable copy: Invite Gift popup (WelcomeGiftModal.jsx) ---
+  // {new_points} and {referrer_points} are replaced client-side with
+  // invite_gift_new_user_points / invite_gift_referrer_points.
+  invite_gift_popup_title: { type: 'string', default: 'Welcome!' },
+  invite_gift_popup_message: {
+    type: 'string',
+    default: 'Watch one quick ad to claim +{new_points} ADLX — your friend gets +{referrer_points} ADLX too!',
+  },
+  invite_gift_popup_button_text: { type: 'string', default: 'Watch Ad & Claim' },
+
+  // --- Editable copy: one-device-one-account restriction page ---
+  // (ChannelGate's sibling — see components/DeviceRestrictionGate.jsx.)
+  // Shown to any account whose device_id was already associated with a
+  // DIFFERENT Telegram account at signup — see users.multi_account_flagged.
+  device_restriction_title: { type: 'string', default: 'One Account Per Device' },
+  device_restriction_message: {
+    type: 'string',
+    default: 'This device is already linked to another Telegram account. Only one account per device is allowed.',
+  },
+
+  // --- Editable copy: "X joined your network" referrer popup ---
+  // {names} is replaced client-side with a comma-joined list of the
+  // newly-joined friends' display names — see routes/referral.js's
+  // /new-joins and components/NewReferralPopup.jsx.
+  referral_join_popup_title: { type: 'string', default: 'Congratulations!' },
+  referral_join_popup_message: { type: 'string', default: '{names} joined your network via your referral link!' },
   miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
   miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
   miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js

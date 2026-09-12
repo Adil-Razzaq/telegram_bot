@@ -50,6 +50,11 @@ export default function Wallet({
   const [points, setPoints] = useState('');
   const [history, setHistory] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Full activity log (spins, claims, tasks, mining, invite gift, etc.)
+  // — separate from the withdrawal-only history above.
+  const [showTx, setShowTx] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [txLoaded, setTxLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -117,6 +122,16 @@ export default function Wallet({
     }
   }
 
+  async function loadTransactions() {
+    try {
+      const res = await api.transactionHistory();
+      setTransactions(res.transactions);
+      setTxLoaded(true);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   useEffect(() => {
     api.getConfig().then(setConfig).catch(() => {});
     loadPayouts();
@@ -151,6 +166,34 @@ export default function Wallet({
     setShowHistory((v) => !v);
     if (!historyLoaded) loadHistory();
   }
+
+  function toggleTx() {
+    setShowTx((v) => !v);
+    if (!txLoaded) loadTransactions();
+  }
+
+  // Friendly labels for every ledger `type` this app writes — see
+  // schema.sql's comment on the ledger table for the canonical list.
+  // Falls back to the raw type string for anything not listed here so
+  // a future new ledger type never renders as blank.
+  const TX_TYPE_LABELS = {
+    spin_entry: 'Spin Entry Fee',
+    spin_payout: 'Spin Payout',
+    referral_grant: 'Referral Bonus',
+    referral_linked: 'Referral Linked',
+    referral_claim: 'Referral Claim',
+    invite_gift_new_user: 'Welcome Gift',
+    invite_gift_referrer: 'Invite Gift Bonus',
+    miner_claim: 'Mining Claim',
+    streak_claim: 'Streak Claim',
+    task_claim: 'Task Reward',
+    ad_task_claim: 'Watch & Earn',
+    adsgram_task_banner: 'Task Banner Ad',
+    extra_ad_task: 'Bonus Ad Task',
+    withdrawal_request: 'Withdrawal Requested',
+    withdrawal_completed: 'Withdrawal Completed',
+    withdrawal_rejected: 'Withdrawal Rejected',
+  };
 
   const pointsPerUsd = config?.points_per_usd || 10000;
   const flatFee = config?.withdrawal_fee_flat_points || 0;
@@ -496,6 +539,42 @@ export default function Wallet({
                       {copiedId === w.id ? 'Copied' : 'Copy'}
                     </button>
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      <div className="glass-card">
+        <span className="glass-card-icon round">📋</span>
+        <div className="glass-card-body">
+          <p className="glass-card-title">Transaction History</p>
+          <p className="glass-card-subtitle">Every spin, claim, task, and mining reward</p>
+        </div>
+        <button className="gold-button" onClick={toggleTx}>
+          {showTx ? 'Close' : 'Open'}
+        </button>
+      </div>
+
+      {showTx && (
+        <>
+          {!txLoaded ? (
+            <p className="wallet-empty">Loading…</p>
+          ) : transactions.length === 0 ? (
+            <p className="wallet-empty">No activity yet.</p>
+          ) : (
+            <ul className="wallet-history">
+              {transactions.map((t) => (
+                <li key={t.id} className="wallet-history-item">
+                  <div>
+                    <strong>{TX_TYPE_LABELS[t.type] || t.type}</strong>
+                    <span style={{ color: t.points_delta >= 0 ? 'var(--accent)' : '#f0594f', marginLeft: 8 }}>
+                      {t.points_delta >= 0 ? '+' : ''}
+                      {t.points_delta} ADLX
+                    </span>
+                  </div>
+                  <div className="wallet-history-meta">{new Date(t.created_at).toLocaleString()}</div>
                 </li>
               ))}
             </ul>

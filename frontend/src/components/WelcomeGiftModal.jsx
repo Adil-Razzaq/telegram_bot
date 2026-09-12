@@ -46,6 +46,12 @@ export default function WelcomeGiftModal({ onBalanceChange }) {
 
   if (!status?.eligible || dismissed) return null;
 
+  // {new_points}/{referrer_points} placeholders in the admin-configured
+  // message get substituted with the real numbers here.
+  const message = (status.popup_message || '')
+    .replace('{new_points}', status.new_user_points)
+    .replace('{referrer_points}', status.referrer_points);
+
   return (
     <div className="welcome-gift-overlay">
       <div className="welcome-gift-card">
@@ -54,7 +60,7 @@ export default function WelcomeGiftModal({ onBalanceChange }) {
         </button>
         <div className="welcome-gift-emoji">🎉</div>
         <h2 className="welcome-gift-title">
-          {myName ? `Welcome, ${myName}!` : 'Welcome!'}
+          {myName ? `${status.popup_title}, ${myName}!` : status.popup_title}
         </h2>
         {me?.id && <p className="welcome-gift-id">Telegram ID: {me.id}</p>}
         {status.referrer_username ? (
@@ -66,13 +72,10 @@ export default function WelcomeGiftModal({ onBalanceChange }) {
             You were invited by user <strong>{status.referrer_telegram_id}</strong>
           </p>
         ) : null}
-        <p className="welcome-gift-offer">
-          Watch one quick ad to claim <strong>+{status.new_user_points} ADLX</strong> — your friend
-          gets <strong>+{status.referrer_points} ADLX</strong> too!
-        </p>
+        <p className="welcome-gift-offer">{message}</p>
         {error && <p className="welcome-gift-error">{error}</p>}
         <button className="welcome-gift-claim-button" onClick={handleClaim} disabled={claiming}>
-          {claiming ? 'Loading…' : 'Watch Ad & Claim'}
+          {claiming ? 'Loading…' : status.popup_button_text}
         </button>
         <button className="welcome-gift-later-button" onClick={() => setDismissed(true)}>
           Maybe later

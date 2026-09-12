@@ -1,15 +1,19 @@
 const API_BASE = import.meta.env?.VITE_API_BASE || 'http://localhost:4000/api';
 
+import { getDeviceId } from './deviceId';
+
 function getInitData() {
   return window.Telegram?.WebApp?.initData || '';
 }
 
 async function apiCall(path, { method = 'GET', body } = {}) {
+  const deviceId = getDeviceId();
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
       'X-Telegram-Init-Data': getInitData(),
+      ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -67,6 +71,11 @@ export const api = {
   prepareInviteGift: () => apiCall('/referral/invite-gift/prepare', { method: 'POST' }),
   claimInviteGift: (nonce) => apiCall('/referral/invite-gift/claim', { method: 'POST', body: { nonce } }),
   channelGateStatus: () => apiCall('/user/channel-gate-status'),
+  deviceRestrictionStatus: () => apiCall('/user/device-restriction-status'),
+  preparedShare: (refLink) => apiCall('/referral/prepared-share', { method: 'POST', body: { refLink } }),
+  newReferralJoins: () => apiCall('/referral/new-joins'),
+  ackNewReferralJoins: () => apiCall('/referral/new-joins/ack', { method: 'POST' }),
+  transactionHistory: () => apiCall('/user/transactions'),
   streakStatus: () => apiCall('/streak/status'),
   prepareStreakClaim: () => apiCall('/streak/prepare-claim', { method: 'POST' }),
   claimStreak: (nonce) => apiCall('/streak/claim', { method: 'POST', body: { nonce } }),

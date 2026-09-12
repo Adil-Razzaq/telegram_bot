@@ -82,4 +82,42 @@ router.get('/channel-gate-status', telegramAuth, async (req, res) => {
   }
 });
 
+// One-device-one-account hard gate — see db.js's comment on
+// users.multi_account_flagged for how/when this gets set (at signup
+// time, in middleware/telegramAuth.js). Unlike the channel gate, there
+// is nothing actionable for the user to do here, so no "verify" button
+// — just the message.
+router.get('/device-restriction-status', telegramAuth, async (req, res) => {
+  try {
+    const [result, title, message] = await Promise.all([
+      client.execute({
+        sql: 'SELECT multi_account_flagged FROM users WHERE telegram_id = ?',
+        args: [req.telegramUser.id],
+      }),
+      getSetting('device_restriction_title'),
+      getSetting('device_restriction_message'),
+    ]);
+    const flagged = Boolean(result.rows[0]?.multi_account_flagged);
+    res.json({ ok: true, restricted: flagged, title, message });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Full activity history (every ledger entry: spins, claims, tasks,
+// mining claims, withdrawals, invite gift, etc.) for the Profile tab's
+// Transaction History section — see components/Wallet.jsx.
+router.get('/transactions', telegramAuth, async (req, res) => {
+  try {
+    const result = await client.execute({
+      sql: `SELECT id, type, points_delta, meta, created_at FROM ledger
+            WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 100`,
+      args: [req.telegramUser.id],
+    });
+    res.json({ ok: true, transactions: result.rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

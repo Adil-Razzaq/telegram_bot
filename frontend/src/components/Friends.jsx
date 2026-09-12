@@ -111,11 +111,35 @@ export default function Friends({ telegramId, onBalanceChange }) {
   // paste a copied link somewhere themselves — meaningfully lower
   // friction, so meaningfully more actual invites sent per user who
   // taps this.
-  function shareLink() {
+  // Tries the rich, image-attached share first (Telegram.WebApp.
+  // shareMessage — Bot API 7.10+ clients, and only if the admin has
+  // configured a banner image); falls back to the plain t.me/share/url
+  // link (works everywhere, no image) if that's unavailable or fails
+  // for any reason. Either path opens Telegram's own native chat/
+  // contact picker — never a dead end for the user.
+  async function shareLink() {
     if (!refLink) return;
+    const tg = window.Telegram?.WebApp;
+
+    if (typeof tg?.shareMessage === 'function') {
+      try {
+        const { id } = await api.preparedShare(refLink);
+        tg.shareMessage(id, (sent) => {
+          if (sent) {
+            setShared(true);
+            setTimeout(() => setShared(false), 2000);
+          }
+        });
+        return;
+      } catch (e) {
+        // Not configured, or Telegram rejected it — fall through to
+        // the plain-link share below rather than leaving the user with
+        // nothing to happen when they tap Share.
+      }
+    }
+
     const text = 'Join me and start earning — tap to open!';
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(text)}`;
-    const tg = window.Telegram?.WebApp;
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(shareUrl);
     } else {

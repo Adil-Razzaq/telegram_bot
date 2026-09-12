@@ -78,9 +78,9 @@ async function telegramAuth(req, res, next) {
     // bot (very common — most people use the menu button directly) had
     // a permanently NULL username in the database.
     await client.execute({
-      sql: `INSERT INTO users (telegram_id, username) VALUES (?, ?)
-            ON CONFLICT(telegram_id) DO UPDATE SET username = excluded.username`,
-      args: [userObj.id, userObj.username || null],
+      sql: `INSERT INTO users (telegram_id, username, first_name) VALUES (?, ?, ?)
+            ON CONFLICT(telegram_id) DO UPDATE SET username = excluded.username, first_name = excluded.first_name`,
+      args: [userObj.id, userObj.username || null, userObj.first_name || null],
     });
 
     // Fire-and-forget — never let analytics bookkeeping slow down or
@@ -111,6 +111,31 @@ async function telegramAuth(req, res, next) {
         });
       })
       .catch(() => {});
+
+    // One-device-one-account (best-effort, see db.js's comment on
+    // users.device_id for the honest limitations). Only ever runs the
+    // check ONCE per user — guarded by "WHERE device_id IS NULL" below
+    // — so this costs nothing on every subsequent request either.
+    const deviceId = req.header('X-Device-Id');
+    if (deviceId) {
+      client
+        .execute({ sql: `SELECT device_id FROM users WHERE telegram_id = ?`, args: [userObj.id] })
+        .then(async (result) => {
+          if (result.rows[0]?.device_id) return; // already recorded — never re-evaluate
+
+          const existing = await client.execute({
+            sql: `SELECT telegram_id FROM users WHERE device_id = ? AND telegram_id != ? LIMIT 1`,
+            args: [deviceId, userObj.id],
+          });
+          const flagged = existing.rows.length > 0;
+
+          await client.execute({
+            sql: `UPDATE users SET device_id = ?, multi_account_flagged = ? WHERE telegram_id = ? AND device_id IS NULL`,
+            args: [deviceId, flagged ? 1 : 0, userObj.id],
+          });
+        })
+        .catch(() => {});
+    }
 
     next();
   } catch (err) {

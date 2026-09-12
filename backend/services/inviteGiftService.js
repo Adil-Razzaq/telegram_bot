@@ -16,7 +16,7 @@ async function getStatus({ telegramId }) {
   const [settings, userRes] = await Promise.all([
     getAllSettings(),
     client.execute({
-      sql: `SELECT users.referred_by, users.invite_gift_claimed,
+      sql: `SELECT users.referred_by, users.invite_gift_claimed, users.multi_account_flagged,
                    referrer.telegram_id AS referrer_telegram_id, referrer.username AS referrer_username
             FROM users
             LEFT JOIN users AS referrer ON referrer.telegram_id = users.referred_by
@@ -26,13 +26,23 @@ async function getStatus({ telegramId }) {
   ]);
   const user = userRes.rows[0];
   const configured = Boolean(settings.invite_gift_adsgram_block_id);
-  const eligible = configured && Boolean(user?.referred_by) && !user?.invite_gift_claimed;
+  // multi_account_flagged is defense in depth — grantReferral already
+  // refuses to set referred_by at all for a flagged account, so this
+  // condition mainly covers accounts flagged AFTER referred_by was
+  // already set (e.g. this feature rolling out after they signed up).
+  const eligible =
+    configured && Boolean(user?.referred_by) && !user?.invite_gift_claimed && !user?.multi_account_flagged;
 
   return {
     eligible,
     block_id: settings.invite_gift_adsgram_block_id,
     new_user_points: settings.invite_gift_new_user_points,
     referrer_points: settings.invite_gift_referrer_points,
+    // Admin-editable popup copy — {new_points}/{referrer_points}
+    // placeholders are substituted client-side (see WelcomeGiftModal.jsx).
+    popup_title: settings.invite_gift_popup_title,
+    popup_message: settings.invite_gift_popup_message,
+    popup_button_text: settings.invite_gift_popup_button_text,
     // For the app-open popup: "You were invited by @username" (falls
     // back to a plain Telegram ID if the referrer has no username set
     // — not everyone does).
@@ -69,11 +79,11 @@ async function claimGift({ telegramId, nonce }) {
     // one-shot flag in this app does (see referralService.js's
     // maybeQualifyReferral for the identical pattern).
     const userRes = await tx.execute({
-      sql: 'SELECT referred_by, invite_gift_claimed FROM users WHERE telegram_id = ?',
+      sql: 'SELECT referred_by, invite_gift_claimed, multi_account_flagged FROM users WHERE telegram_id = ?',
       args: [telegramId],
     });
     const user = userRes.rows[0];
-    if (!user?.referred_by || user.invite_gift_claimed) {
+    if (!user?.referred_by || user.invite_gift_claimed || user.multi_account_flagged) {
       const err = new Error('No welcome gift available');
       err.statusCode = 400;
       throw err;

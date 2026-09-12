@@ -91,6 +91,29 @@ const COLUMNS_TO_ENSURE = [
   // only ever be claimed once per new user, no matter how many times
   // they revisit the Friends tab.
   { table: 'users', column: 'invite_gift_claimed', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED (one-device-one-account, best-effort): a browser-stored ID
+  // (localStorage, see frontend/src/deviceId.js) sent on every request.
+  // NOT a hardware fingerprint — Telegram Mini Apps expose no real
+  // device identity, so this is trivially defeated by clearing storage
+  // or switching devices. It's a soft deterrent against casual
+  // multi-accounting for referral/invite-gift farming, not a hard
+  // guarantee. See middleware/telegramAuth.js for how it's captured.
+  { table: 'users', column: 'device_id', ddl: 'TEXT' },
+  // Set when this account's device_id was already associated with a
+  // DIFFERENT telegram_id at signup time — used to deny referral
+  // credit and Invite Gift eligibility for this account (see
+  // referralService.js's grantReferral and inviteGiftService.js).
+  { table: 'users', column: 'multi_account_flagged', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED: Telegram's initData carries first_name on every request, but
+  // nothing was ever persisting it (only username was) — needed for
+  // the "X joined your network" referrer notification (see
+  // routes/referral.js's /new-joins), since most users never set a
+  // public @username at all.
+  { table: 'users', column: 'first_name', ddl: 'TEXT' },
+  // Marks whether the REFERRER has already been shown the "X joined
+  // your network" popup for THIS specific referred user — lives on the
+  // REFERRED user's row (one flag per referral, not per referrer).
+  { table: 'users', column: 'referral_notified', ddl: 'INTEGER DEFAULT 0' },
 ];
 
 async function ensureColumn(table, column, ddl) {
@@ -117,6 +140,11 @@ async function migrate() {
 
   await client.execute(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address) WHERE wallet_address IS NOT NULL'
+  );
+  // NOT unique — multiple accounts sharing one device_id is exactly the
+  // condition being detected, not prevented at the DB level.
+  await client.execute(
+    'CREATE INDEX IF NOT EXISTS idx_users_device_id ON users(device_id) WHERE device_id IS NOT NULL'
   );
 }
 
