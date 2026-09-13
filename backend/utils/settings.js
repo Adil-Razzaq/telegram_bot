@@ -46,14 +46,18 @@ const SETTING_DEFS = {
   invite_gift_referrer_points: { type: 'number', default: 100, min: 0 },
 
   // --- Image-based Telegram share (viral growth) ---
-  // A publicly reachable HTTPS image URL used as the banner for a rich,
-  // photo-attached share via Telegram's savePreparedInlineMessage +
-  // Telegram.WebApp.shareMessage() (Bot API 7.10+) — see
-  // services/preparedShareService.js. Blank = feature hidden; the
-  // frontend falls back to the plain-link share (Telegram's
-  // t.me/share/url, no custom image) it already has either way, so
-  // this is purely an enhancement, never a requirement.
+  // The banner is AUTO-GENERATED server-side by default (a branded SVG
+  // rendered to PNG with the referrer's name — see
+  // services/referralBannerService.js) — no image asset needed from
+  // you. Set invite_share_banner_image_url to use your OWN custom image
+  // instead (must be a real public HTTPS image URL); leave it blank to
+  // keep the auto-generated one. Either way this feeds
+  // savePreparedInlineMessage + Telegram.WebApp.shareMessage() (Bot API
+  // 7.10+) for a rich, photo-attached share; older Telegram clients
+  // transparently fall back to the plain-link share that already
+  // existed, so this is purely an enhancement, never a requirement.
   invite_share_banner_image_url: { type: 'string', default: '' },
+  invite_share_app_name: { type: 'string', default: 'Spin & Earn' },
 
   // --- Editable copy: Invite Gift popup (WelcomeGiftModal.jsx) ---
   // {new_points} and {referrer_points} are replaced client-side with

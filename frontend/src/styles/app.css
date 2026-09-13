@@ -1460,6 +1460,17 @@ h3 {
 .leaderboard-page {
   position: relative;
   z-index: 0;
+  /* Overrides .tasks-page's own background-image (this element carries
+     both classes — see Leaderboard.jsx). That one uses a second
+     gradient layer, "center top" positioning, and no fixed attachment,
+     which visibly crops/zooms the SAME bg.png differently than every
+     other tab (Miner/Friends/Profile), which all just inherit the
+     plain global html/body background. This makes Ranks match those,
+     not Tasks. */
+  background-image: url('/bg.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
 }
 .leaderboard-page::before {
   content: '';
@@ -1838,3 +1849,20 @@ h3 {
   cursor: pointer;
 }
 .channel-gate-verify-button:disabled { opacity: 0.6; }
+
+/* --- Overflow safety for NewReferralPopup (potentially many names) ---
+   The card itself gets a max-height + scroll as a last resort, but the
+   real fix is capping the MESSAGE text area's own height so the close
+   ("✕") and action button are ALWAYS visible/reachable, never pushed
+   off-screen no matter how long the admin's message template or the
+   generated name list gets. */
+.welcome-gift-card-scrollable {
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.welcome-gift-offer-scroll {
+  max-height: 30vh;
+  overflow-y: auto;
+}

@@ -3,6 +3,7 @@ const { telegramAuth } = require('../middleware/telegramAuth');
 const { prepareClaim, claimReferral, grantReferral } = require('../services/referralService');
 const inviteGiftService = require('../services/inviteGiftService');
 const { preparePhotoShare } = require('../services/preparedShareService');
+const { generateBannerPng } = require('../services/referralBannerService');
 const { client } = require('../db/db');
 const { getSetting } = require('../utils/settings');
 
@@ -174,7 +175,8 @@ router.post('/invite-gift/claim', telegramAuth, async (req, res) => {
 router.post('/prepared-share', telegramAuth, async (req, res) => {
   const { refLink } = req.body;
   try {
-    const result = await preparePhotoShare({ telegramId: req.telegramUser.id, refLink });
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const result = await preparePhotoShare({ telegramId: req.telegramUser.id, refLink, baseUrl });
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -190,21 +192,30 @@ router.post('/prepared-share', telegramAuth, async (req, res) => {
 
 router.get('/new-joins', telegramAuth, async (req, res) => {
   try {
-    const [result, title, messageTemplate] = await Promise.all([
+    const [countRes, listRes, title, messageTemplate] = await Promise.all([
+      client.execute({
+        sql: `SELECT COUNT(*) AS count FROM users WHERE referred_by = ? AND referral_notified = 0`,
+        args: [req.telegramUser.id],
+      }),
+      // Capped — if hundreds/thousands joined since the referrer's last
+      // visit, listing every single name would overflow the popup off
+      // the screen and block the user from dismissing it. Show the
+      // most recent few, "and N more" covers the rest (see
+      // NewReferralPopup.jsx).
       client.execute({
         sql: `SELECT telegram_id, username, first_name FROM users
               WHERE referred_by = ? AND referral_notified = 0
-              ORDER BY created_at ASC`,
+              ORDER BY created_at DESC LIMIT 5`,
         args: [req.telegramUser.id],
       }),
       getSetting('referral_join_popup_title'),
       getSetting('referral_join_popup_message'),
     ]);
-    const joins = result.rows.map((r) => ({
+    const joins = listRes.rows.map((r) => ({
       telegram_id: r.telegram_id,
       name: r.first_name || (r.username ? `@${r.username}` : `User ${r.telegram_id}`),
     }));
-    res.json({ ok: true, joins, title, message_template: messageTemplate });
+    res.json({ ok: true, joins, total_count: countRes.rows[0].count, title, message_template: messageTemplate });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -219,6 +230,35 @@ router.post('/new-joins/ack', telegramAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Auto-generated banner image (see services/referralBannerService.js).
+// DELIBERATELY UNAUTHENTICATED — Telegram's own servers fetch this URL
+// directly to render the share preview, and won't send our normal
+// X-Telegram-Init-Data header. Uses the REAL name on file for
+// telegramId (not free-text input) specifically so this can't be used
+// as an open text-banner generator for arbitrary content — still
+// covered by the app-wide rate limiter in server.js.
+router.get('/banner/:telegramId.png', async (req, res) => {
+  try {
+    const telegramId = Number(req.params.telegramId);
+    if (!Number.isInteger(telegramId)) return res.status(400).end();
+
+    const userRes = await client.execute({
+      sql: 'SELECT first_name, username FROM users WHERE telegram_id = ?',
+      args: [telegramId],
+    });
+    const user = userRes.rows[0];
+    const referrerName = user?.first_name || (user?.username ? `@${user.username}` : 'A friend');
+
+    const png = await generateBannerPng({ referrerName });
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(png);
+  } catch (err) {
+    console.error('banner generation failed:', err.message);
+    res.status(500).end();
   }
 });
 

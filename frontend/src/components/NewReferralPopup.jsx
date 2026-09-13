@@ -25,18 +25,24 @@ export default function NewReferralPopup() {
 
   if (!data || data.joins.length === 0 || dismissed) return null;
 
-  const names = data.joins.map((j) => j.name).join(', ');
+  // Bounded regardless of how many joined — the backend already caps
+  // the list at 5 and gives us the real total separately, so this
+  // never turns into a wall of names that pushes the dismiss button
+  // off-screen no matter how many thousands of people joined.
+  const shown = data.joins.map((j) => j.name).join(', ');
+  const extra = data.total_count - data.joins.length;
+  const names = extra > 0 ? `${shown} and ${extra} more` : shown;
   const message = (data.message_template || '').replace('{names}', names);
 
   return (
     <div className="welcome-gift-overlay">
-      <div className="welcome-gift-card">
+      <div className="welcome-gift-card welcome-gift-card-scrollable">
         <button className="welcome-gift-close" onClick={handleDismiss} aria-label="Dismiss">
           ✕
         </button>
         <div className="welcome-gift-emoji">🎉</div>
         <h2 className="welcome-gift-title">{data.title}</h2>
-        <p className="welcome-gift-offer">{message}</p>
+        <p className="welcome-gift-offer welcome-gift-offer-scroll">{message}</p>
         <button className="welcome-gift-claim-button" onClick={handleDismiss}>
           Nice!
         </button>

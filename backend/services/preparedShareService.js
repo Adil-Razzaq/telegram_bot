@@ -11,18 +11,21 @@ const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOK
  * image attached, unlike the plain t.me/share/url link (which only
  * carries text and whatever preview Telegram generates on its own).
  *
- * Requires invite_share_banner_image_url to be set to a real, publicly
- * reachable HTTPS image URL — returns a clear error otherwise, and the
- * frontend is expected to fall back to the plain-link share in that
- * case (see components/Friends.jsx's shareLink()).
+ * The banner is auto-generated (see routes/referral.js's
+ * /banner/:telegramId.png and services/referralBannerService.js) unless
+ * invite_share_banner_image_url is set to a custom image — no admin
+ * setup required either way.
+ *
+ * `baseUrl` is this server's own public origin (e.g.
+ * "https://your-app.onrender.com"), needed to build an absolute URL for
+ * the auto-generated banner — pass req.protocol + '://' + req.get('host')
+ * from the route handler; Telegram's servers need a real HTTPS URL to
+ * fetch, a relative path won't work.
  */
-async function preparePhotoShare({ telegramId, refLink }) {
-  const bannerUrl = await getSetting('invite_share_banner_image_url');
-  if (!bannerUrl) {
-    const err = new Error('Image-based share is not configured');
-    err.statusCode = 400;
-    throw err;
-  }
+async function preparePhotoShare({ telegramId, refLink, baseUrl }) {
+  const customBannerUrl = await getSetting('invite_share_banner_image_url');
+  const bannerUrl = customBannerUrl || `${baseUrl}/api/referral/banner/${telegramId}.png`;
+
   if (!/^https:\/\/t\.me\//.test(refLink)) {
     const err = new Error('Invalid invite link');
     err.statusCode = 400;
