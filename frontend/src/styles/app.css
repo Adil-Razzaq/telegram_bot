@@ -1697,6 +1697,18 @@ h3 {
   box-shadow: 0 4px 14px var(--gold-glow, rgba(214, 158, 46, 0.4));
 }
 .welcome-gift-claim-button:disabled { opacity: 0.6; }
+/* --- NewReferralPopup only: keep the card on-screen and the
+   Nice! button reachable no matter how many friends joined --- */
+.new-referral-card {
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.new-referral-message-scroll {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .welcome-gift-later-button {
   width: 100%;
   padding: 10px;

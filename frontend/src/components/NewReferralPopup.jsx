@@ -25,18 +25,25 @@ export default function NewReferralPopup() {
 
   if (!data || data.joins.length === 0 || dismissed) return null;
 
-  const names = data.joins.map((j) => j.name).join(', ');
+  const MAX_NAMES_SHOWN = 5;
+  const allNames = data.joins.map((j) => j.name);
+  const extraCount = allNames.length - MAX_NAMES_SHOWN;
+  const names = extraCount > 0
+    ? `${allNames.slice(0, MAX_NAMES_SHOWN).join(', ')} and ${extraCount} other${extraCount === 1 ? '' : 's'}`
+    : allNames.join(', ');
   const message = (data.message_template || '').replace('{names}', names);
 
   return (
     <div className="welcome-gift-overlay">
-      <div className="welcome-gift-card">
+      <div className="welcome-gift-card new-referral-card">
         <button className="welcome-gift-close" onClick={handleDismiss} aria-label="Dismiss">
           ✕
         </button>
         <div className="welcome-gift-emoji">🎉</div>
         <h2 className="welcome-gift-title">{data.title}</h2>
-        <p className="welcome-gift-offer">{message}</p>
+        <div className="new-referral-message-scroll">
+          <p className="welcome-gift-offer">{message}</p>
+        </div>
         <button className="welcome-gift-claim-button" onClick={handleDismiss}>
           Nice!
         </button>
