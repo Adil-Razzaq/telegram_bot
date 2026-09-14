@@ -36,8 +36,30 @@
   .status-msg { font-size: 13px; margin-top: 8px; }
   .status-msg.ok { color: var(--success); }
   .status-msg.err { color: var(--danger); }
-  .withdrawal-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
-  .withdrawal-item:last-child { border-bottom: none; }
+  .withdrawal-item {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .withdrawal-item:last-child { margin-bottom: 0; }
+  .withdrawal-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 4px 10px; margin-bottom: 10px;
+  }
+  .withdrawal-amounts {
+    font-size: 13px; margin-bottom: 12px; padding: 8px 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .copy-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .copy-row code, .copy-row input {
+    flex: 1; min-width: 0; font-family: monospace; font-size: 12px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 9px; word-break: break-all; margin-bottom: 0;
+  }
+  .copy-row button { flex-shrink: 0; padding: 7px 12px; font-size: 12px; }
+  .withdrawal-item label { margin-top: 4px; }
   .withdrawal-meta { font-family: monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
   #keyGate { text-align: center; margin-top: 60px; }
   #app { display: none; }
@@ -258,22 +280,37 @@
         const effectiveRate = w.amount_usd > 0 ? Math.round(netPoints / w.amount_usd) : null;
         return `
         <div class="withdrawal-item" id="w-${w.id}">
-          <div><strong>${w.points_deducted} pts requested</strong> — ${w.username ? '@' + w.username : 'no username'} (user ${w.telegram_id})</div>
-          <div class="withdrawal-meta">
+          <div class="withdrawal-header">
+            <strong>${w.points_deducted} pts requested</strong>
+            <span class="muted">${w.username ? '@' + w.username : 'no username'} · user ${w.telegram_id}</span>
+          </div>
+
+          <div class="withdrawal-amounts">
             Fee: <strong>${feePoints} pts</strong> &nbsp;→&nbsp;
             Send exactly: <strong>${netPoints} pts ($${w.amount_usd.toFixed(4)})</strong>
-            ${effectiveRate ? `<span class="muted">(${effectiveRate.toLocaleString()} pts = $1)</span>` : ''}
+            ${effectiveRate ? `<div class="muted" style="margin-top:4px">${effectiveRate.toLocaleString()} pts = $1</div>` : ''}
           </div>
-          <div class="withdrawal-meta">
-            Request ID: <code id="wid-${w.id}">${w.id}</code>
-            <button type="button" class="secondary" onclick="copyWithdrawalId('${w.id}', this)">Copy ID</button>
-            — quote this ID if the user contacts support about this withdrawal
+
+          <label>Wallet address</label>
+          <div class="copy-row">
+            <code>${w.usdt_bep20_address}</code>
+            <button type="button" class="secondary" onclick="copyText('${w.usdt_bep20_address}', this)">Copy</button>
           </div>
-          <div class="withdrawal-meta">${w.usdt_bep20_address}</div>
-          <div class="muted">${new Date(w.created_at).toLocaleString()}</div>
-          <div class="row" style="margin-top:8px">
-            <input id="hash-${w.id}" type="text" placeholder="Transaction hash after you send USDT" />
+
+          <label>Request ID <span class="muted">— quote this if the user contacts support</span></label>
+          <div class="copy-row">
+            <code>${w.id}</code>
+            <button type="button" class="secondary" onclick="copyText('${w.id}', this)">Copy</button>
           </div>
+
+          <div class="muted" style="margin-bottom:10px">${new Date(w.created_at).toLocaleString()}</div>
+
+          <label>Transaction hash</label>
+          <div class="copy-row">
+            <input id="hash-${w.id}" type="text" placeholder="Paste tx hash after you send USDT" />
+            <button type="button" class="secondary" onclick="pasteInto('hash-${w.id}', this)">Paste</button>
+          </div>
+
           <div class="row">
             <button onclick="completeWithdrawal('${w.id}')">Mark Complete</button>
             <button class="danger" onclick="rejectWithdrawal('${w.id}')">Reject &amp; Refund</button>
@@ -286,12 +323,30 @@
     }
   }
 
-  function copyWithdrawalId(id, btn) {
-    navigator.clipboard?.writeText(id);
+  function copyText(text, btn) {
+    navigator.clipboard?.writeText(text);
     if (btn) {
       const original = btn.textContent;
       btn.textContent = 'Copied';
       setTimeout(() => { btn.textContent = original; }, 1500);
+    }
+  }
+
+  // navigator.clipboard.readText() requires a secure context and can be
+  // denied by the browser/user — falls back to focusing the field so a
+  // manual Ctrl/Cmd+V still works instead of silently doing nothing.
+  async function pasteInto(inputId, btn) {
+    const input = document.getElementById(inputId);
+    try {
+      const text = await navigator.clipboard.readText();
+      input.value = text.trim();
+      if (btn) {
+        const original = btn.textContent;
+        btn.textContent = 'Pasted';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      }
+    } catch (e) {
+      input.focus();
     }
   }
 
