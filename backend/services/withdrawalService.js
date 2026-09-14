@@ -139,9 +139,9 @@ async function requestWithdrawal({ telegramId, address, points, nonce }) {
     }
     const amountUsd = netPoints / pointsPerUsd;
     await tx.execute({
-      sql: `INSERT INTO withdrawals (id, telegram_id, usdt_bep20_address, amount_usd, points_deducted, status)
-            VALUES (?, ?, ?, ?, ?, 'PENDING')`,
-      args: [id, telegramId, address, amountUsd, points],
+      sql: `INSERT INTO withdrawals (id, telegram_id, usdt_bep20_address, amount_usd, points_deducted, fee_points, net_points, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+      args: [id, telegramId, address, amountUsd, points, feePoints, netPoints],
     });
     await tx.execute({
       sql: 'INSERT INTO ledger (telegram_id, type, points_delta, meta) VALUES (?, ?, ?, ?)',
@@ -318,8 +318,13 @@ async function editCompletedWithdrawal({ withdrawalId, txHash, processedAt, poin
     // never drift out of sync with each other or with how every other
     // conversion in the app works.
     const pointsPerUsd = await getSetting('points_per_usd');
-    sets.push('points_deducted = ?', 'amount_usd = ?');
-    args.push(pointsNum, pointsNum / pointsPerUsd);
+    sets.push('points_deducted = ?', 'amount_usd = ?', 'net_points = ?', 'fee_points = ?');
+    // This edit path only ever existed to fix a typo in what was
+    // actually paid — it has no separate fee calculation, so the
+    // corrected value IS the net amount transferred (fee_points reset
+    // to 0 rather than left holding the pre-edit fee, which would no
+    // longer correspond to anything real about this corrected row).
+    args.push(pointsNum, pointsNum / pointsPerUsd, pointsNum, 0);
   }
   if (sets.length === 0) {
     const err = new Error('Nothing to update — provide txHash, processedAt, and/or points');

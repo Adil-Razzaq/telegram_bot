@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 
 const { migrate } = require('./db/db');
 const { reconcileStuckReferrals } = require('./services/referralService');
+const { sendBreakingSoonReminders } = require('./services/streakService');
 const spinRoutes = require('./routes/spin');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
@@ -113,6 +114,14 @@ migrate()
     // minutes with zero manual admin action.
     reconcileStuckReferrals();
     setInterval(reconcileStuckReferrals, 10 * 60 * 1000);
+
+    // "Your streak is about to break" DM — see streakService.js's
+    // sendBreakingSoonReminders. It's a no-op most of the time (gated
+    // on the current UTC hour and on already-reminded-today users), so
+    // running it every 15 minutes just keeps the reminder's timing
+    // reasonably tight without hammering the Telegram API.
+    sendBreakingSoonReminders();
+    setInterval(sendBreakingSoonReminders, 15 * 60 * 1000);
   })
   .catch((err) => {
     console.error('Failed to run database migration on startup:', err);

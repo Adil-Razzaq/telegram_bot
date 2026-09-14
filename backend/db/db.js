@@ -114,6 +114,26 @@ const COLUMNS_TO_ENSURE = [
   // your network" popup for THIS specific referred user — lives on the
   // REFERRED user's row (one flag per referral, not per referrer).
   { table: 'users', column: 'referral_notified', ddl: 'INTEGER DEFAULT 0' },
+  // ADDED (admin withdrawal clarity): fee_points/net_points, captured
+  // at the exact moment of the request — same reasoning as amount_usd
+  // already being computed then rather than re-derived later, so a
+  // later change to withdrawal_fee_flat_points/percent or
+  // points_per_usd can never retroactively change what an already-
+  // pending or already-paid withdrawal shows. Before this, the fee
+  // actually charged only existed buried in ledger.meta (JSON text),
+  // not as a queryable column — which is exactly why checking it
+  // meant opening the database directly instead of the admin panel.
+  // Constant default (0) is fine for ALTER ADD COLUMN.
+  { table: 'withdrawals', column: 'fee_points', ddl: 'INTEGER DEFAULT 0' },
+  // No constant default possible here (it depends on points_deducted,
+  // per row) — backfilled explicitly in migrate() below.
+  { table: 'withdrawals', column: 'net_points', ddl: 'INTEGER' },
+  // ADDED (streak-breaking-soon reminder): the UTC calendar day we last
+  // sent this user the "your streak is about to break" DM — lets
+  // sendBreakingSoonReminders (streakService.js), which runs on a
+  // repeating timer, send at most one reminder per user per day
+  // instead of re-DMing them every time the timer fires.
+  { table: 'user_streak', column: 'reminder_sent_date', ddl: 'TEXT' },
 ];
 
 async function ensureColumn(table, column, ddl) {
@@ -136,6 +156,14 @@ async function migrate() {
   // row that just got the column added still has it NULL. Set it explicitly.
   await client.execute(
     `UPDATE miner_state SET cycles_reset_date = date('now') WHERE cycles_reset_date IS NULL`
+  );
+
+  // One-time backfill for withdrawals.net_points (see COLUMNS_TO_ENSURE
+  // above) — every pre-existing row predates fee_points ever being
+  // tracked, so net_points = points_deducted (i.e. "no fee") is the
+  // correct historical assumption for them specifically.
+  await client.execute(
+    `UPDATE withdrawals SET net_points = points_deducted WHERE net_points IS NULL`
   );
 
   await client.execute(

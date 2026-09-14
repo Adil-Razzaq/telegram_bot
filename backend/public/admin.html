@@ -247,9 +247,23 @@
         listEl.innerHTML = '<p class="muted">No pending withdrawals.</p>';
         return;
       }
-      listEl.innerHTML = withdrawals.map((w) => `
+      listEl.innerHTML = withdrawals.map((w) => {
+        const netPoints = w.net_points ?? w.points_deducted;
+        const feePoints = w.fee_points || 0;
+        // Reconstructed from net_points/amount_usd (both captured together,
+        // at request time, in the same calculation) rather than reading
+        // the CURRENT points_per_usd setting — that could have changed
+        // since this withdrawal was requested, which would silently show
+        // the wrong rate for an older pending request.
+        const effectiveRate = w.amount_usd > 0 ? Math.round(netPoints / w.amount_usd) : null;
+        return `
         <div class="withdrawal-item" id="w-${w.id}">
-          <div><strong>${w.points_deducted} pts</strong> ($${w.amount_usd.toFixed(2)}) — ${w.username ? '@' + w.username : 'no username'} (user ${w.telegram_id})</div>
+          <div><strong>${w.points_deducted} pts requested</strong> — ${w.username ? '@' + w.username : 'no username'} (user ${w.telegram_id})</div>
+          <div class="withdrawal-meta">
+            Fee: <strong>${feePoints} pts</strong> &nbsp;→&nbsp;
+            Send exactly: <strong>${netPoints} pts ($${w.amount_usd.toFixed(4)})</strong>
+            ${effectiveRate ? `<span class="muted">(${effectiveRate.toLocaleString()} pts = $1)</span>` : ''}
+          </div>
           <div class="withdrawal-meta">
             Request ID: <code id="wid-${w.id}">${w.id}</code>
             <button type="button" class="secondary" onclick="copyWithdrawalId('${w.id}', this)">Copy ID</button>
@@ -265,7 +279,8 @@
             <button class="danger" onclick="rejectWithdrawal('${w.id}')">Reject &amp; Refund</button>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     } catch (e) {
       listEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
     }
@@ -499,6 +514,9 @@
     streak_day6_points: 'Streak: Day 6 points',
     streak_day7_points: 'Streak: Day 7 points',
     streak_ad_network: 'Streak: ad network',
+    streak_reminder_enabled: 'Streak: send "about to break" reminder DM',
+    streak_reminder_hour_utc: 'Streak: reminder hour (UTC, 0-23)',
+    streak_reminder_message: 'Streak: reminder DM text — bold tags are rendered (Telegram HTML); {day} and {points} get substituted',
   };
 
   // Groups every setting key above into a labeled, collapsible section
@@ -513,7 +531,7 @@
     'Miner': ['miner_daily_points', 'miner_cycles_per_day', 'miner_cycle_hours', 'miner_boost_multiplier', 'miner_boost_duration_minutes', 'miner_start_ads_enabled', 'miner_claim_ads_enabled', 'miner_boost_ads_enabled'],
     'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled', 'referral_join_popup_title', 'referral_join_popup_message'],
     'Invite Gift': ['invite_gift_adsgram_block_id', 'invite_gift_new_user_points', 'invite_gift_referrer_points', 'invite_share_banner_image_url', 'invite_gift_popup_title', 'invite_gift_popup_message', 'invite_gift_popup_button_text'],
-    'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled'],
+    'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled', 'streak_reminder_enabled', 'streak_reminder_hour_utc', 'streak_reminder_message'],
     'Withdrawals': ['withdrawal_fee_flat_points', 'withdrawal_fee_percent', 'min_withdrawal_points', 'withdrawal_ads_enabled', 'live_payouts_compact_mode', 'payout_channel_url'],
     'Ads — Reward Actions (Spin/Miner/Referral)': ['action_ads_enabled', 'action_ads_network'],
     'Ads — Passive / Auto': ['auto_ad_enabled', 'auto_ad_first_enabled', 'auto_ad_network', 'auto_ad_first_delay_seconds', 'auto_ad_interval_seconds', 'auto_ad_frequency', 'auto_ad_capping_hours'],

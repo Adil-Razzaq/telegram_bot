@@ -241,6 +241,24 @@ const SETTING_DEFS = {
   // action_ads_network and auto_ad_network, own dedicated switch as
   // requested.
   streak_ad_network: { type: 'enum', default: 'monetag', options: ['monetag', 'adsgram'] },
+  // ADDED: proactive "your streak is about to break" push — sent as a
+  // real Telegram DM (via utils/telegram.js's sendTelegramMessage), not
+  // an in-app popup, since a user who hasn't opened the app today
+  // won't see an in-app anything. See streakService.js's
+  // sendBreakingSoonReminders, run on a timer from server.js exactly
+  // like reconcileStuckReferrals. hour_utc controls how late in the
+  // UTC day the reminder fires (default 20:00 UTC = 4 hours before the
+  // day rolls over and an unclaimed streak actually breaks).
+  streak_reminder_enabled: { type: 'boolean', default: true },
+  streak_reminder_hour_utc: { type: 'number', default: 20, min: 0, max: 23 },
+  // {day} = the streak day they're currently on (about to lose),
+  // {points} = the reward they'd get for claiming today, substituted
+  // in streakService.js.
+  streak_reminder_message: {
+    type: 'string',
+    default:
+      '⏳ <b>Streak Alert:</b> Day {day} ends at midnight UTC — claim now to bank <b>+{points} ADLX</b> and keep it alive.',
+  },
 
   // --- Anti-bot-farm gating (referral qualification + withdrawal channel gate) ---
   // Comma-separated Telegram channel usernames/IDs (e.g.
