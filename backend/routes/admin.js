@@ -459,4 +459,15 @@ router.get('/analytics/user/:telegramId', async (req, res) => {
   }
 });
 
+// Look up a user by @username and see how many people they've
+// referred, and how many of those are active (1d/3d/7d) — see
+// analyticsService.getNetworkByUsername.
+router.get('/analytics/network/:username', async (req, res) => {
+  try {
+    res.json({ ok: true, network: await analyticsService.getNetworkByUsername(req.params.username) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

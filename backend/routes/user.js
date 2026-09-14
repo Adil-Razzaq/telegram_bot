@@ -107,11 +107,22 @@ router.get('/device-restriction-status', telegramAuth, async (req, res) => {
 // Full activity history (every ledger entry: spins, claims, tasks,
 // mining claims, withdrawals, invite gift, etc.) for the Profile tab's
 // Transaction History section — see components/Wallet.jsx.
+//
+// 'referral_linked' is deliberately excluded: it's a 0-point audit-only
+// marker written when referral qualification gating is on (see
+// referralService.js's grantReferral) purely so the admin analytics
+// page can see "this referral exists and is awaiting qualification".
+// It was never a real balance change, so showing it to the end user as
+// a "Referral Linked — +0 ADLX" transaction only confused people who
+// referred someone and correctly saw no reward yet (the real
+// 'referral_grant' entry appears later, once the referred user
+// qualifies).
 router.get('/transactions', telegramAuth, async (req, res) => {
   try {
     const result = await client.execute({
       sql: `SELECT id, type, points_delta, meta, created_at FROM ledger
-            WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 100`,
+            WHERE telegram_id = ? AND type != 'referral_linked'
+            ORDER BY created_at DESC LIMIT 100`,
       args: [req.telegramUser.id],
     });
     res.json({ ok: true, transactions: result.rows });

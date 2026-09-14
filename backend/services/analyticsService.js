@@ -188,10 +188,75 @@ async function getUserProfile(telegramId) {
   };
 }
 
+// Backs the admin panel's "Network Lookup" card: given a @username,
+// finds that user and reports how many people they've directly
+// referred (users.referred_by), and how many of THOSE referred users
+// are active — same active_1d/3d/7d convention as getOverview(),
+// based on last_seen_at. Referrals are single-level in this app (see
+// referralService.js), so "network" here means direct referrals only,
+// not a multi-tier downline.
+async function getNetworkByUsername(username) {
+  const clean = String(username || '').trim().replace(/^@/, '');
+  if (!clean) {
+    const err = new Error('Username is required');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const userRes = await client.execute({
+    sql: `SELECT telegram_id, username, first_name FROM users WHERE LOWER(username) = LOWER(?)`,
+    args: [clean],
+  });
+  const owner = userRes.rows[0];
+  if (!owner) {
+    const err = new Error('No user found with that username');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const countsRes = await client.execute({
+    sql: `
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN last_seen_at >= datetime('now', '-1 day') THEN 1 ELSE 0 END) AS active_1d,
+        SUM(CASE WHEN last_seen_at >= datetime('now', '-3 day') THEN 1 ELSE 0 END) AS active_3d,
+        SUM(CASE WHEN last_seen_at >= datetime('now', '-7 day') THEN 1 ELSE 0 END) AS active_7d
+      FROM users
+      WHERE referred_by = ?
+    `,
+    args: [owner.telegram_id],
+  });
+  const c = countsRes.rows[0];
+
+  // Capped list of the actual referred users, most-recently-active
+  // first, so the admin can see who's active/inactive, not just a
+  // count. NULLS (never seen) sort last automatically under DESC.
+  const membersRes = await client.execute({
+    sql: `
+      SELECT telegram_id, username, first_name, last_seen_at, created_at
+      FROM users
+      WHERE referred_by = ?
+      ORDER BY last_seen_at DESC
+      LIMIT 200
+    `,
+    args: [owner.telegram_id],
+  });
+
+  return {
+    owner,
+    network_size: c.total || 0,
+    active_1d: c.active_1d || 0,
+    active_3d: c.active_3d || 0,
+    active_7d: c.active_7d || 0,
+    members: membersRes.rows,
+  };
+}
+
 module.exports = {
   getOverview,
   getNewUsersSeries,
   getCountryBreakdown,
   getImpressions,
   getUserProfile,
+  getNetworkByUsername,
 };

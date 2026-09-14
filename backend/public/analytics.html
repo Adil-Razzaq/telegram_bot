@@ -84,6 +84,19 @@
     <div id="lookupResult"></div>
   </div>
 
+  <h2>Network Lookup</h2>
+  <div class="card">
+    <p class="muted">Find a user by @username and see how many people they've directly referred, and how many of those are still active.</p>
+    <div class="row">
+      <div>
+        <label>Username</label>
+        <input id="networkUsername" type="text" placeholder="@username" />
+      </div>
+      <button onclick="lookupNetwork()">Search</button>
+    </div>
+    <div id="networkResult"></div>
+  </div>
+
   <h2>New Users</h2>
   <div class="card">
     <div class="row">
@@ -243,6 +256,46 @@
         <table><tr><th>When</th><th>Amount</th><th>Status</th></tr>${withdrawalRows}</table>
         <h2 style="margin-top:18px">Ad Event Summary</h2>
         <table><tr><th>Action</th><th>Status</th><th>Count</th></tr>${adRows}</table>
+      `;
+    } catch (e) {
+      el.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;
+    }
+  }
+
+  async function lookupNetwork() {
+    const username = document.getElementById('networkUsername').value.trim();
+    const el = document.getElementById('networkResult');
+    if (!username) return;
+    el.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const { network: n } = await adminFetch(`/admin/analytics/network/${encodeURIComponent(username)}`);
+      const stats = [
+        ['Network size', n.network_size],
+        ['Active (1d)', n.active_1d],
+        ['Active (3d)', n.active_3d],
+        ['Active (7d)', n.active_7d],
+      ];
+      const statGrid = `<div class="stat-grid" style="margin-top:10px">${stats.map(([label, value]) => `
+        <div class="stat">
+          <div class="value">${esc(value)}</div>
+          <div class="label">${esc(label)}</div>
+        </div>
+      `).join('')}</div>`;
+
+      const memberRows = n.members.map((m) => `
+        <tr>
+          <td>${esc(m.username ? '@' + m.username : (m.first_name || '—'))}</td>
+          <td>${esc(m.telegram_id)}</td>
+          <td>${esc(m.created_at)}</td>
+          <td>${esc(m.last_seen_at || 'never')}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="muted">No referrals yet</td></tr>';
+
+      el.innerHTML = `
+        <p class="muted" style="margin-top:10px">Owner: ${esc(n.owner.username ? '@' + n.owner.username : n.owner.first_name || n.owner.telegram_id)} (ID ${esc(n.owner.telegram_id)})</p>
+        ${statGrid}
+        <h2 style="margin-top:18px">Referred Users ${n.members.length >= 200 ? '(showing most recent 200)' : ''}</h2>
+        <table><tr><th>User</th><th>Telegram ID</th><th>Joined</th><th>Last seen</th></tr>${memberRows}</table>
       `;
     } catch (e) {
       el.innerHTML = `<p class="status-msg err">${esc(e.message)}</p>`;

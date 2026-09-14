@@ -47,6 +47,25 @@ html, body {
   color: var(--text);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  /* App-like UI, not a document: without this, tapping/long-pressing any
+     text (most noticeably the Miner tab's "Start a X cycle…" / "Cycle
+     complete…" status line) triggers the browser's native text-selection
+     UI — a blinking caret plus selection handles — which reads as the
+     text being editable, even though nothing here is an input. Copyable
+     values (referral link, wallet address) already use dedicated Copy
+     buttons via navigator.clipboard, so nothing relies on manual
+     selection. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Actual inputs/textareas still need normal text selection and caret
+   behavior to be usable for typing/editing. */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* Every quantity in this app — balances, points, countdowns, withdrawal
@@ -1451,12 +1470,18 @@ h3 {
 }
 
 /* --- Extra darkening for the Ranks (Leaderboard) tab specifically ---
-   The global .app::before scrim covers the whole app, but this tab has
-   more plain headers/paragraphs sitting directly on the background
-   (fewer opaque cards than Tasks/Miner) — this layers ONE more dark
-   shade on top of the SAME background (via ::before, not by replacing
-   .tasks-page's own background-image/color) so text stays readable
-   without changing the background itself or its layout margins. */
+   The global .app::before scrim (55% dark) already covers the whole
+   app, and this overlay STACKS on top of it (same area, both semi-
+   transparent) rather than replacing it — so the two multiply
+   together, not add. The original values here (0.68 / 0.5 / 0.38)
+   combined with that 55% scrim worked out to ~86% → ~72% combined
+   darkness, which crushed bg.png to near-black specifically on this
+   tab (every other tab only has the single 55% scrim) — reported as
+   "background image not set properly". These lower values keep a
+   little extra contrast behind the top headers (where this tab has
+   plain text directly on the background, unlike Tasks/Miner) while
+   easing to ZERO extra darkening by 180px down, so the background
+   actually matches the rest of the app instead of stacking on it. */
 .leaderboard-page {
   position: relative;
   z-index: 0;
@@ -1465,15 +1490,11 @@ h3 {
   content: '';
   position: absolute;
   inset: 0;
-  /* Stronger at the top (where the headings/subtitles sit directly on
-     the background with no card behind them) easing down toward where
-     the leaderboard rows/streak cards already have their own opaque
-     background providing contrast. */
   background: linear-gradient(
     180deg,
-    rgba(2, 8, 16, 0.68) 0%,
-    rgba(2, 8, 16, 0.5) 180px,
-    rgba(2, 8, 16, 0.38) 100%
+    rgba(2, 8, 16, 0.28) 0%,
+    rgba(2, 8, 16, 0.12) 120px,
+    rgba(2, 8, 16, 0) 220px
   );
   pointer-events: none;
   z-index: -1;
