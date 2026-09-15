@@ -514,6 +514,8 @@
     miner_daily_points: 'Miner: total points/day',
     miner_cycles_per_day: 'Miner: cycles/day',
     miner_cycle_hours: 'Miner: hours/cycle',
+    miner_cycle_complete_message: 'Miner: "cycle complete" text — {amount} gets substituted',
+    miner_idle_start_message: 'Miner: "start a cycle" text — {hours} and {points} get substituted',
     miner_boost_multiplier: 'Miner: Boost rate multiplier (ad-gated, renewable)',
     miner_boost_duration_minutes: 'Miner: Boost window length (minutes)',
     spin_entry_fee: 'Spin: entry fee (points)',
@@ -583,7 +585,7 @@
   const SETTINGS_CATEGORIES = {
     'General & Anti-Abuse': ['points_per_usd', 'official_channels', 'app_open_require_channel_join', 'referral_require_channel_join', 'withdrawal_require_channel_join', 'referral_qualify_miner_cycles', 'device_restriction_title', 'device_restriction_message'],
     'Spin': ['spin_entry_fee', 'spin_free_spins', 'spin_payout_1', 'spin_payout_2', 'spin_payout_3', 'spin_payout_4', 'spin_payout_5', 'spin_payout_6', 'spin_ads_enabled'],
-    'Miner': ['miner_daily_points', 'miner_cycles_per_day', 'miner_cycle_hours', 'miner_boost_multiplier', 'miner_boost_duration_minutes', 'miner_start_ads_enabled', 'miner_claim_ads_enabled', 'miner_boost_ads_enabled'],
+    'Miner': ['miner_daily_points', 'miner_cycles_per_day', 'miner_cycle_hours', 'miner_cycle_complete_message', 'miner_idle_start_message', 'miner_boost_multiplier', 'miner_boost_duration_minutes', 'miner_start_ads_enabled', 'miner_claim_ads_enabled', 'miner_boost_ads_enabled'],
     'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled', 'referral_join_popup_title', 'referral_join_popup_message'],
     'Invite Gift': ['invite_gift_adsgram_block_id', 'invite_gift_new_user_points', 'invite_gift_referrer_points', 'invite_share_banner_image_url', 'invite_gift_popup_title', 'invite_gift_popup_message', 'invite_gift_popup_button_text'],
     'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled', 'streak_reminder_enabled', 'streak_reminder_hour_utc', 'streak_reminder_message'],

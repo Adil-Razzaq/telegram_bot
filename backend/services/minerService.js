@@ -145,6 +145,16 @@ async function getStatus({ telegramId }) {
   const cyclePoints = currentCyclePoints(row, settings);
   const totalSeconds = row.status === 'running' ? cycleTotalSeconds(row) : 0;
   const boostActive = row.status === 'running' && isBoostCurrentlyActive(row);
+  const accruedNowValue = accruedNow(row, settings);
+
+  // Substituted here (not in the frontend) so admins can reword these
+  // freely from Settings without ever needing a frontend deploy — the
+  // frontend just renders the finished string as-is.
+  const cycleCompleteMessage = (settings.miner_cycle_complete_message || '')
+    .replace('{amount}', accruedNowValue.toFixed(4));
+  const idleStartMessage = (settings.miner_idle_start_message || '')
+    .replace('{hours}', settings.miner_cycle_hours)
+    .replace('{points}', cyclesRemaining > 0 ? cyclePoints : 0);
 
   let secondsRemainingInCycle = 0;
   if (row.status === 'running') {
@@ -176,7 +186,7 @@ async function getStatus({ telegramId }) {
     cycle_hours: settings.miner_cycle_hours,
     current_cycle_points: row.status === 'running' ? cyclePoints : 0,
     rate_per_second: effectiveRate,
-    accrued_now: accruedNow(row, settings),
+    accrued_now: accruedNowValue,
     // Unfloored — lets the frontend's live counter climb smoothly and
     // reflect boosted earnings past the base cycle target instead of
     // being capped at it. Never used for payout (see accruedNow).
@@ -192,6 +202,8 @@ async function getStatus({ telegramId }) {
     // once a window expires, this flips back to true, letting the user
     // "renew" with another ad.
     can_boost: row.status === 'running' && !boostActive,
+    cycle_complete_message: cycleCompleteMessage,
+    idle_start_message: idleStartMessage,
   };
 }
 

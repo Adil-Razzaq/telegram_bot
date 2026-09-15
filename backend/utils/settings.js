@@ -84,6 +84,17 @@ const SETTING_DEFS = {
   miner_daily_points: { type: 'number', default: 150, min: 0 }, // total points available from the miner per day, across all cycles
   miner_cycles_per_day: { type: 'number', default: 4, min: 1 },
   miner_cycle_hours: { type: 'number', default: 6, min: 0.1 }, // 4 x 6 = a full 24h day, by design — see minerService.js
+  // ADDED: the two status lines on the Miner tab (previously hardcoded
+  // in Miner.jsx) — {amount}, {hours}, {points} get substituted with
+  // the real live values in minerService.js's getStatus.
+  miner_cycle_complete_message: {
+    type: 'string',
+    default: 'Cycle complete — {amount} ADLX Ready. Tap below to claim it.',
+  },
+  miner_idle_start_message: {
+    type: 'string',
+    default: 'Start a {hours}h cycle worth ~{points} ADLX.',
+  },
   // Boost: watching an ad raises the accrual RATE by this multiplier
   // for miner_boost_duration_minutes, then reverts — renewable with
   // another ad once it expires. See minerService.js's

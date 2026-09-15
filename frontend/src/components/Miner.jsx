@@ -391,12 +391,12 @@ export default function Miner({
       )}
       {cycleComplete && (
         <p className="miner-copy miner-copy-complete">
-          Cycle complete — {liveAccrued.toFixed(4)} ADLX Ready. Tap below to claim it.
+          {status.cycle_complete_message}
         </p>
       )}
       {canRestart && (
         <p className="miner-copy">
-          Start a {status.cycle_hours}h cycle worth ~{status.next_cycle_points} ADLX.
+          {status.idle_start_message}
           {' '}({status.cycles_remaining_today} of {status.cycles_per_day} cycles left today)
         </p>
       )}
