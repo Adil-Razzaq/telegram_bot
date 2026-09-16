@@ -1327,6 +1327,51 @@ h3 {
   flex-shrink: 0;
 }
 
+/* --- Mining Contest (Leaderboard.jsx) --- */
+.contest-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), var(--surface-2));
+  border: 1px solid var(--gold-light, #facc15);
+  margin-bottom: 10px;
+}
+.contest-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+.contest-timer .material-symbols-outlined { font-size: 18px; }
+.contest-prizes {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+/* 1st place ("king of the round") gets the strongest treatment; 2nd/3rd
+   a lighter version of the same gold accent so all three read as
+   podium finishers without competing with the crown. */
+.leaderboard-row.contest-rank-1 {
+  border-color: var(--gold-light, #facc15);
+  background: rgba(250, 204, 21, 0.14);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.3) inset;
+}
+.leaderboard-row.contest-rank-1 .leaderboard-rank { font-size: 18px; }
+.leaderboard-row.contest-rank-2,
+.leaderboard-row.contest-rank-3 {
+  border-color: rgba(250, 204, 21, 0.35);
+  background: rgba(250, 204, 21, 0.05);
+}
+.leaderboard-row.contest-rank-2 .leaderboard-rank,
+.leaderboard-row.contest-rank-3 .leaderboard-rank { font-size: 16px; }
+
 /* --- Stream (Stream.jsx) --- */
 .stream-list {
   display: flex;

@@ -256,4 +256,42 @@ CREATE TABLE IF NOT EXISTS user_streak (
     last_claim_date TEXT
 );
 
+-- ADDED: recurring "Mining Contest" — ranks users by ACTUAL ACTIVITY
+-- (mining cycles completed + points earned, both computed live from
+-- ledger.type='miner_claim' rows within [starts_at, ends_at), never
+-- from lifetime totals) over an admin-set duration, with the top 3
+-- winning an admin-set ADLX prize once it ends. This exists precisely
+-- because the referral leaderboard above ranks by an all-time count,
+-- so a long-inactive user who referred a lot once can sit at #1
+-- forever — this one only ever reflects activity within the CURRENT
+-- window, and a finished contest's results are frozen permanently in
+-- `results` so they stay accurate to show/download/share even after
+-- prizes are paid and the numbers keep changing for the next contest.
+-- See services/miningContestService.js.
+CREATE TABLE IF NOT EXISTS mining_contests (
+    id TEXT PRIMARY KEY,
+    starts_at DATETIME NOT NULL,
+    ends_at DATETIME NOT NULL,
+    duration_days INTEGER NOT NULL,
+    -- How many mining cycles one of your referrals needs to have
+    -- completed (lifetime) to count as "active" for THIS round.
+    -- Snapshotted here (not read live from settings) for the same
+    -- reason prizes are below.
+    active_referral_cycles INTEGER NOT NULL DEFAULT 2,
+    -- Prizes are snapshotted at CONTEST CREATION time (like
+    -- withdrawals.fee_points/net_points elsewhere in this app) so a
+    -- later settings change can never retroactively alter what an
+    -- already-running or already-finished contest actually promised
+    -- or paid its winners.
+    prize_1st INTEGER NOT NULL,
+    prize_2nd INTEGER NOT NULL,
+    prize_3rd INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'completed')),
+    -- NULL while active; once completed, a JSON array of the final
+    -- top-N rows (telegram_id, username, active_referrals, rank,
+    -- prize_awarded) — the permanent, shareable historical record.
+    results TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT OR IGNORE INTO spin_pool (id, current_pool_points, daily_collected) VALUES (1, 1000, 0);
