@@ -80,7 +80,6 @@ export const api = {
   prepareStreakClaim: () => apiCall('/streak/prepare-claim', { method: 'POST' }),
   claimStreak: (nonce) => apiCall('/streak/claim', { method: 'POST', body: { nonce } }),
   leaderboardTop: () => apiCall('/leaderboard/top'),
-  leaderboardMiningContest: () => apiCall('/leaderboard/mining-contest'),
   taskBannerStatus: () => apiCall('/tasks/task-banner/status'),
   prepareTaskBanner: () => apiCall('/tasks/task-banner/prepare', { method: 'POST' }),
   claimTaskBanner: (nonce) => apiCall('/tasks/task-banner/claim', { method: 'POST', body: { nonce } }),

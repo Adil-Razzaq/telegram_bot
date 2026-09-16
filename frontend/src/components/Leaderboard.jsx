@@ -4,44 +4,19 @@ import { withConfirmationRetry } from '../monetag';
 import { showStreakAd } from '../adNetwork';
 import { playNotificationSound } from '../sound';
 
-function formatCountdown(seconds) {
-  if (seconds <= 0) return 'Ending soon';
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  if (days > 0) return `${days}d ${hours}h left`;
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}h ${minutes}m left`;
-}
-
-// 1st place gets a crown ("king of the round") rather than a medal,
-// to stand out from 2nd/3rd — matches how this was asked for.
-function contestMedal(rank) {
-  if (rank === 1) return '👑';
-  if (rank === 2) return '🥈';
-  if (rank === 3) return '🥉';
-  return null;
-}
-
 export default function Leaderboard() {
   const [config, setConfig] = useState(null);
   const [streak, setStreak] = useState(null);
   const [board, setBoard] = useState(null);
-  const [contest, setContest] = useState(null);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState(null);
 
   async function refresh() {
     try {
-      const [cfg, s, b, c] = await Promise.all([
-        api.getConfig(),
-        api.streakStatus(),
-        api.leaderboardTop(),
-        api.leaderboardMiningContest(),
-      ]);
+      const [cfg, s, b] = await Promise.all([api.getConfig(), api.streakStatus(), api.leaderboardTop()]);
       setConfig(cfg);
       setStreak(s);
       setBoard(b);
-      setContest(c.contest);
     } catch (e) {
       setError(e.message);
     }
@@ -118,57 +93,6 @@ export default function Leaderboard() {
           {claiming ? '…' : streak.can_claim ? 'Watch ad' : 'Done'}
         </button>
       </div>
-
-      {contest && (
-        <>
-          <h2 className="page-title" style={{ marginTop: 24 }}>
-            Mining Contest
-          </h2>
-          <p className="leaderboard-subtitle">
-            Ranked by active referrals — people you referred this round who've completed{' '}
-            {contest.active_referral_cycles}+ mining cycles.
-          </p>
-
-          <div className="contest-card">
-            <div className="contest-timer">
-              <span className="material-symbols-outlined">timer</span>
-              {formatCountdown(contest.seconds_remaining)}
-            </div>
-            <div className="contest-prizes">
-              <span>👑 {contest.prizes.first} ADLX</span>
-              <span>🥈 {contest.prizes.second} ADLX</span>
-              <span>🥉 {contest.prizes.third} ADLX</span>
-            </div>
-          </div>
-
-          {contest.you && (
-            <div className="leaderboard-row leaderboard-you">
-              <span className="leaderboard-rank">{contest.you.rank ? `#${contest.you.rank}` : '—'}</span>
-              <span className="leaderboard-name">You</span>
-              <span className="leaderboard-count">{contest.you.active_referrals} active</span>
-            </div>
-          )}
-
-          <div className="tasks-list">
-            {contest.leaderboard.length === 0 && (
-              <p className="tasks-empty">No active referrals yet this round — be the first on the board.</p>
-            )}
-            {contest.leaderboard.map((row) => {
-              const medal = contestMedal(row.rank);
-              return (
-                <div
-                  key={row.rank}
-                  className={`leaderboard-row${row.rank <= 3 ? ` contest-rank-${row.rank}` : ''}`}
-                >
-                  <span className="leaderboard-rank">{medal || `#${row.rank}`}</span>
-                  <span className="leaderboard-name">{row.display_name}</span>
-                  <span className="leaderboard-count">{row.active_referrals} active</span>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
 
       <h2 className="page-title" style={{ marginTop: 24 }}>
         Leaderboard

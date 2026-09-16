@@ -119,12 +119,6 @@
     <div id="editWithdrawalForm"></div>
   </div>
 
-  <h2>Mining Contest</h2>
-  <div class="card">
-    <p class="muted">Ranked by active referrals — people someone referred DURING the round who've since completed enough mining cycles to count as "active" (threshold set under Settings → Mining Contest below, along with round length and prizes). The current round is always listed first; finished rounds are frozen and downloadable to share publicly.</p>
-    <div id="miningContestList">Loading…</div>
-  </div>
-
   <h2>Adjust a User's Balance</h2>
   <div class="card">
     <label>Telegram ID</label>
@@ -329,72 +323,7 @@
     }
   }
 
-  async function loadMiningContests() {
-    const listEl = document.getElementById('miningContestList');
-    try {
-      const { contests } = await adminFetch('/admin/mining-contest/history');
-      if (contests.length === 0) {
-        listEl.innerHTML = '<p class="muted">No contest has run yet — turn it on under Settings → Mining Contest below.</p>';
-        return;
-      }
-      listEl.innerHTML = contests.map((c) => {
-        const isActive = c.status === 'active';
-        const rows = c.results || [];
-        const top = rows.slice(0, 3);
-        const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
-        return `
-        <div class="withdrawal-item">
-          <div class="withdrawal-header">
-            <strong>${isActive ? '🟢 Current round' : 'Finished round'} — ${c.duration_days} days</strong>
-            <span class="muted">${new Date(c.starts_at).toLocaleDateString()} → ${new Date(c.ends_at).toLocaleDateString()}</span>
-          </div>
-          <div class="withdrawal-amounts">
-            Active = ${c.active_referral_cycles}+ mining cycles &nbsp;·&nbsp;
-            Prizes: 🥇 ${c.prize_1st} ADLX &nbsp;·&nbsp; 🥈 ${c.prize_2nd} ADLX &nbsp;·&nbsp; 🥉 ${c.prize_3rd} ADLX
-          </div>
-          ${isActive
-            ? '<p class="muted">Still running — final standings and downloadable results appear here once it ends.</p>'
-            : `
-              ${top.map((r) => `<div>${medal[r.rank] || r.rank + '.'} ${r.display_name} — ${r.active_referrals} active referrals (+${r.prize_awarded} ADLX)</div>`).join('')}
-              <div class="row" style="margin-top:8px">
-                <button type="button" class="secondary" onclick="downloadContestCsv('${c.id}')">Download full results (CSV)</button>
-              </div>
-            `}
-        </div>
-      `;
-      }).join('');
-    } catch (e) {
-      listEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
-    }
-  }
-
-  // A plain <a href> can't send the x-admin-key HEADER adminAuth
-  // requires (and the endpoint deliberately doesn't accept it as a
-  // query param, to avoid the key ending up in browser history/server
-  // logs), so the file is fetched here and handed to the browser as a
-  // blob download instead.
-  async function downloadContestCsv(id) {
-    try {
-      const res = await fetch(`${API_BASE}/admin/mining-contest/${id}/download`, {
-        headers: { 'x-admin-key': getKey() },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Download failed');
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mining-contest-${id}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert(e.message);
-    }
-  }
+  function copyText(text, btn) {
     navigator.clipboard?.writeText(text);
     if (btn) {
       const original = btn.textContent;
@@ -645,12 +574,6 @@
     streak_reminder_enabled: 'Streak: send "about to break" reminder DM',
     streak_reminder_hour_utc: 'Streak: reminder hour (UTC, 0-23)',
     streak_reminder_message: 'Streak: reminder DM text — bold tags are rendered (Telegram HTML); {day} and {points} get substituted',
-    mining_contest_enabled: 'Mining Contest: enabled',
-    mining_contest_duration_days: 'Mining Contest: round length (days)',
-    mining_contest_active_referral_cycles: 'Mining Contest: mining cycles a referral needs to count as "active"',
-    mining_contest_prize_1st: 'Mining Contest: 1st place prize (ADLX)',
-    mining_contest_prize_2nd: 'Mining Contest: 2nd place prize (ADLX)',
-    mining_contest_prize_3rd: 'Mining Contest: 3rd place prize (ADLX)',
   };
 
   // Groups every setting key above into a labeled, collapsible section
@@ -666,7 +589,6 @@
     'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled', 'referral_join_popup_title', 'referral_join_popup_message'],
     'Invite Gift': ['invite_gift_adsgram_block_id', 'invite_gift_new_user_points', 'invite_gift_referrer_points', 'invite_share_banner_image_url', 'invite_gift_popup_title', 'invite_gift_popup_message', 'invite_gift_popup_button_text'],
     'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled', 'streak_reminder_enabled', 'streak_reminder_hour_utc', 'streak_reminder_message'],
-    'Mining Contest': ['mining_contest_enabled', 'mining_contest_duration_days', 'mining_contest_active_referral_cycles', 'mining_contest_prize_1st', 'mining_contest_prize_2nd', 'mining_contest_prize_3rd'],
     'Withdrawals': ['withdrawal_fee_flat_points', 'withdrawal_fee_percent', 'min_withdrawal_points', 'withdrawal_ads_enabled', 'live_payouts_compact_mode', 'payout_channel_url'],
     'Ads — Reward Actions (Spin/Miner/Referral)': ['action_ads_enabled', 'action_ads_network'],
     'Ads — Passive / Auto': ['auto_ad_enabled', 'auto_ad_first_enabled', 'auto_ad_network', 'auto_ad_first_delay_seconds', 'auto_ad_interval_seconds', 'auto_ad_frequency', 'auto_ad_capping_hours'],
@@ -904,7 +826,6 @@
     document.getElementById('keyGate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadWithdrawals();
-    loadMiningContests();
     loadSettings();
     loadFlags();
     loadBotContent();
