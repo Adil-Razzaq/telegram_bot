@@ -396,6 +396,8 @@
       alert(e.message);
     }
   }
+
+  function copyText(text, btn) {
     navigator.clipboard?.writeText(text);
     if (btn) {
       const original = btn.textContent;
