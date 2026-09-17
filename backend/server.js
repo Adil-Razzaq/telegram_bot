@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { migrate } = require('./db/db');
 const { reconcileStuckReferrals } = require('./services/referralService');
 const { sendBreakingSoonReminders } = require('./services/streakService');
+const { ensureActiveMiningContest } = require('./services/miningContestService');
 const spinRoutes = require('./routes/spin');
 const referralRoutes = require('./routes/referral');
 const withdrawalRoutes = require('./routes/withdrawal');
@@ -122,6 +123,14 @@ migrate()
     // reasonably tight without hammering the Telegram API.
     sendBreakingSoonReminders();
     setInterval(sendBreakingSoonReminders, 15 * 60 * 1000);
+
+    // Mining Contest lifecycle — see miningContestService.js. Checked
+    // every 5 minutes so a contest's end time (and therefore its
+    // payout + winner DMs) never sits stale for long, while staying
+    // cheap since it's a no-op unless a contest actually just ended or
+    // none is currently running.
+    ensureActiveMiningContest();
+    setInterval(ensureActiveMiningContest, 5 * 60 * 1000);
   })
   .catch((err) => {
     console.error('Failed to run database migration on startup:', err);
