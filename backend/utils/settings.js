@@ -271,27 +271,6 @@ const SETTING_DEFS = {
       '⏳ <b>Streak Alert:</b> Day {day} ends at midnight UTC — claim now to bank <b>+{points} ADLX</b> and keep it alive.',
   },
 
-  // ADDED: Mining Contest — a recurring, admin-configured prize
-  // leaderboard ranked by ACTIVE REFERRALS: how many people someone
-  // referred DURING the current round who have since completed at
-  // least `mining_contest_active_referral_cycles` mining cycles
-  // (lifetime — users.total_miner_cycles_completed). This is
-  // deliberately NOT the referrer's own mining activity — it's a
-  // referral-quality contest, just measured by real usage instead of
-  // a raw referral count that a long-inactive user could still be
-  // sitting on top of forever. See services/miningContestService.js.
-  mining_contest_enabled: { type: 'boolean', default: false },
-  mining_contest_duration_days: { type: 'enum', default: '7', options: ['7', '15', '30'] },
-  mining_contest_active_referral_cycles: { type: 'number', default: 2, min: 1 },
-  // Below these, that position gets NO prize even if it's #1 — set to
-  // 0 to always pay out regardless of how few active referrals anyone has.
-  mining_contest_min_active_referrals_1st: { type: 'number', default: 10, min: 0 },
-  mining_contest_min_active_referrals_2nd: { type: 'number', default: 8, min: 0 },
-  mining_contest_min_active_referrals_3rd: { type: 'number', default: 6, min: 0 },
-  mining_contest_prize_1st: { type: 'number', default: 500, min: 0 },
-  mining_contest_prize_2nd: { type: 'number', default: 300, min: 0 },
-  mining_contest_prize_3rd: { type: 'number', default: 150, min: 0 },
-
   // --- Anti-bot-farm gating (referral qualification + withdrawal channel gate) ---
   // Comma-separated Telegram channel usernames/IDs (e.g.
   // "@YourChannel,@YourSecondChannel") treated as "official channels" by

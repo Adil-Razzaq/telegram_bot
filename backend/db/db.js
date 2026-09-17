@@ -128,10 +128,6 @@ const COLUMNS_TO_ENSURE = [
   // No constant default possible here (it depends on points_deducted,
   // per row) — backfilled explicitly in migrate() below.
   { table: 'withdrawals', column: 'net_points', ddl: 'INTEGER' },
-  { table: 'mining_contests', column: 'active_referral_cycles', ddl: 'INTEGER DEFAULT 2' },
-  { table: 'mining_contests', column: 'min_active_referrals_1st', ddl: 'INTEGER DEFAULT 10' },
-  { table: 'mining_contests', column: 'min_active_referrals_2nd', ddl: 'INTEGER DEFAULT 8' },
-  { table: 'mining_contests', column: 'min_active_referrals_3rd', ddl: 'INTEGER DEFAULT 6' },
   // ADDED (streak-breaking-soon reminder): the UTC calendar day we last
   // sent this user the "your streak is about to break" DM — lets
   // sendBreakingSoonReminders (streakService.js), which runs on a
