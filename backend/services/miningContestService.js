@@ -71,6 +71,17 @@ async function getCurrentContestStatus({ telegramId, limit = 20 } = {}) {
   const contest = await getActiveContest();
   if (!contest) return null;
 
+  // A round already in progress is intentionally left to finish and pay
+  // out its winners on its own schedule (see ensureActiveMiningContest)
+  // even if the admin flips this off mid-round — that's what keeps a
+  // round from being stranded without ever paying anyone. But the APP
+  // itself should revert to the plain leaderboard the moment it's
+  // turned off, not keep showing a contest nobody can see is "off"
+  // from their end — so the display is gated here, separately from
+  // whether the round itself keeps running.
+  const settings = await getAllSettings();
+  if (!settings.mining_contest_enabled) return null;
+
   const leaderboard = await computeStandings(contest.starts_at, contest.ends_at, contest.active_referral_cycles, limit);
   let you = leaderboard.find((r) => r.telegram_id === telegramId) || null;
   if (!you && telegramId != null) {

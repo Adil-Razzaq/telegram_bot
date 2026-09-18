@@ -1,10 +1,17 @@
 const { client } = require('../db/db');
+const { getSetting } = require('../utils/settings');
 
 /**
- * Ranks ALL users by how many people they've referred (users.referred_by
- * = their telegram_id), largest first — same counting query already
- * used for an individual user's own count in routes/referral.js, just
- * aggregated across everyone here instead of filtered to one telegram_id.
+ * Ranks ALL users by how many of their referrals are ACTIVE — i.e. the
+ * referred user (users.referred_by = this user's telegram_id) has
+ * completed at least `mining_contest_active_referral_cycles` mining
+ * cycles (lifetime — users.total_miner_cycles_completed), largest
+ * first. This is deliberately NOT a raw referral count: a signup who
+ * never touched the miner shouldn't count toward someone's rank here
+ * any more than they do in the Active Referral Contest — same
+ * definition of "active" reused from that setting so the word means
+ * the same thing everywhere in the app, just evaluated all-time here
+ * rather than scoped to a contest round.
  */
 
 function displayName(row) {
@@ -16,15 +23,16 @@ function displayName(row) {
 }
 
 async function getTopReferrers({ limit = 100, telegramId } = {}) {
+  const activeCycles = await getSetting('mining_contest_active_referral_cycles');
   const res = await client.execute({
     sql: `SELECT u.telegram_id, u.username, COUNT(r.telegram_id) AS referral_count
           FROM users u
-          LEFT JOIN users r ON r.referred_by = u.telegram_id
+          LEFT JOIN users r ON r.referred_by = u.telegram_id AND r.total_miner_cycles_completed >= ?
           GROUP BY u.telegram_id
           HAVING referral_count > 0
           ORDER BY referral_count DESC, u.telegram_id ASC
           LIMIT ?`,
-    args: [limit],
+    args: [activeCycles, limit],
   });
 
   const leaderboard = res.rows.map((row, i) => ({
@@ -34,15 +42,15 @@ async function getTopReferrers({ limit = 100, telegramId } = {}) {
     is_you: telegramId != null && row.telegram_id === telegramId,
   }));
 
-  // If the requesting user isn't in the top `limit` (or has 0
+  // If the requesting user isn't in the top `limit` (or has 0 active
   // referrals, so isn't in the ranked list at all), still tell them
   // their own count and an accurate rank so "you're #142" is possible
   // without paging through the whole table.
   let you = leaderboard.find((r) => r.is_you) || null;
   if (!you && telegramId != null) {
     const ownRes = await client.execute({
-      sql: `SELECT COUNT(*) AS referral_count FROM users WHERE referred_by = ?`,
-      args: [telegramId],
+      sql: `SELECT COUNT(*) AS referral_count FROM users WHERE referred_by = ? AND total_miner_cycles_completed >= ?`,
+      args: [telegramId, activeCycles],
     });
     const ownCount = ownRes.rows[0].referral_count;
     let ownRank = null;
@@ -50,18 +58,18 @@ async function getTopReferrers({ limit = 100, telegramId } = {}) {
       const rankRes = await client.execute({
         sql: `SELECT COUNT(*) + 1 AS rank FROM (
                 SELECT r.referred_by AS tid, COUNT(*) AS cnt
-                FROM users r WHERE r.referred_by IS NOT NULL
+                FROM users r WHERE r.referred_by IS NOT NULL AND r.total_miner_cycles_completed >= ?
                 GROUP BY r.referred_by
                 HAVING cnt > ?
               )`,
-        args: [ownCount],
+        args: [activeCycles, ownCount],
       });
       ownRank = rankRes.rows[0].rank;
     }
     you = { rank: ownRank, display_name: 'You', referral_count: ownCount, is_you: true };
   }
 
-  return { leaderboard, you };
+  return { leaderboard, you, active_referral_cycles: activeCycles };
 }
 
 module.exports = { getTopReferrers };

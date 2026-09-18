@@ -229,26 +229,29 @@ export default function Leaderboard() {
         Leaderboard
       </h2>
       <p className="leaderboard-subtitle">
-        Ranked by total referrals — most referrals at the top.
+        Ranked by active referrals — referred users who've completed {board.active_referral_cycles}+ mining
+        cycles.
       </p>
 
       {board.you && (
         <div className="leaderboard-row leaderboard-you">
-          <span className="leaderboard-rank">{board.you.rank ? `#${board.you.rank}` : '—'}</span>
+          <span className="leaderboard-rank">
+            {board.you.rank ? `#${board.you.rank}` : <span className="leaderboard-unranked">Unranked</span>}
+          </span>
           <span className="leaderboard-name">You</span>
-          <span className="leaderboard-count">{board.you.referral_count} referrals</span>
+          <span className="leaderboard-count">{board.you.referral_count} active</span>
         </div>
       )}
 
       <div className="tasks-list">
         {board.leaderboard.length === 0 && (
-          <p className="tasks-empty">No referrals yet — be the first on the board.</p>
+          <p className="tasks-empty">Nobody has an active referral yet — invite a friend to take the top spot.</p>
         )}
         {board.leaderboard.map((row) => (
           <div key={row.rank} className={`leaderboard-row${row.is_you ? ' leaderboard-you' : ''}`}>
             <span className="leaderboard-rank">#{row.rank}</span>
             <span className="leaderboard-name">{row.display_name}</span>
-            <span className="leaderboard-count">{row.referral_count} referrals</span>
+            <span className="leaderboard-count">{row.referral_count} active</span>
           </div>
         ))}
       </div>
