@@ -13,6 +13,7 @@ const {
   editCompletedWithdrawal,
   rejectWithdrawal,
 } = require('../services/withdrawalService');
+const { getContestHistory, getContestById, toCsv } = require('../services/miningContestService');
 const { getRecentActivity } = require('../services/streamService');
 const analyticsService = require('../services/analyticsService');
 
@@ -465,6 +466,31 @@ router.get('/analytics/user/:telegramId', async (req, res) => {
 router.get('/analytics/network/:username', async (req, res) => {
   try {
     res.json({ ok: true, network: await analyticsService.getNetworkByUsername(req.params.username) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Mining Contest — history (current + past, most recent first) and a
+// per-contest CSV download for sharing results publicly. See
+// miningContestService.js for the full lifecycle.
+router.get('/mining-contest/history', async (req, res) => {
+  try {
+    res.json({ ok: true, contests: await getContestHistory({ limit: 30 }) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/mining-contest/:id/download', async (req, res) => {
+  try {
+    const contest = await getContestById(req.params.id);
+    if (!contest.results) {
+      return res.status(400).json({ ok: false, error: 'This contest has not finished yet — nothing to download' });
+    }
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="mining-contest-${contest.id}.csv"`);
+    res.send(toCsv(contest));
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
