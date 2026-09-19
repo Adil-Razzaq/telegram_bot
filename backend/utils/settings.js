@@ -304,17 +304,17 @@ const SETTING_DEFS = {
   mining_contest_start_message: {
     type: 'string',
     default:
-      '🎉 <b>A new Active Referral Contest round has started!</b>\n\n⏱ Duration: {days} days\n🎯 Get a referral to {cycles}+ mining cycles to count as active\n🏆 Prizes: 👑 {prize1} · 🥈 {prize2} · 🥉 {prize3} ADLX\n\nRefer friends and help them get active to climb the leaderboard!',
+      '🎉 <b>New Active Referral Contest Round!</b>\n\nA new round has just started — here is how it works:\n\n⏱ <b>Duration:</b> {days} days\n✅ <b>Active referral:</b> completes {cycles}+ mining cycles\n\n🏆 <b>Prizes</b>\n🥇 1st — {prize1} ADLX\n🥈 2nd — {prize2} ADLX\n🥉 3rd — {prize3} ADLX\n\nRefer your friends and help them stay active to climb the leaderboard and win! 🚀',
   },
   // Subtitle shown under "Leaderboard" in the app — {cycles} substituted.
   leaderboard_subtitle_text: {
     type: 'string',
-    default: 'Ranked by active referrals — referred users who have completed {cycles}+ mining cycles.',
+    default: 'Referred users with {cycles}+ mining cycles completed.',
   },
   // Subtitle shown under "Active Referral Contest" in the app — {cycles} substituted.
   mining_contest_subtitle_text: {
     type: 'string',
-    default: 'Ranked by active referrals — people you referred this round who have completed {cycles}+ mining cycles.',
+    default: 'Referrals from this round with {cycles}+ mining cycles completed.',
   },
 
   // --- Anti-bot-farm gating (referral qualification + withdrawal channel gate) ---
