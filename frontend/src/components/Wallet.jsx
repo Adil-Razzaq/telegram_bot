@@ -193,7 +193,6 @@ export default function Wallet({
     withdrawal_request: 'Withdrawal Requested',
     withdrawal_completed: 'Withdrawal Completed',
     withdrawal_rejected: 'Withdrawal Rejected',
-    contest_prize: 'Contest Prize',
   };
 
   const pointsPerUsd = config?.points_per_usd || 10000;

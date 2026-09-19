@@ -132,7 +132,6 @@ const COLUMNS_TO_ENSURE = [
   { table: 'mining_contests', column: 'min_active_referrals_1st', ddl: 'INTEGER DEFAULT 10' },
   { table: 'mining_contests', column: 'min_active_referrals_2nd', ddl: 'INTEGER DEFAULT 8' },
   { table: 'mining_contests', column: 'min_active_referrals_3rd', ddl: 'INTEGER DEFAULT 6' },
-  { table: 'mining_contests', column: 'results_image', ddl: 'BLOB' },
   // ADDED (streak-breaking-soon reminder): the UTC calendar day we last
   // sent this user the "your streak is about to break" DM — lets
   // sendBreakingSoonReminders (streakService.js), which runs on a

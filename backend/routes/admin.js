@@ -13,7 +13,7 @@ const {
   editCompletedWithdrawal,
   rejectWithdrawal,
 } = require('../services/withdrawalService');
-const { getContestHistory, getContestById, getContestImage, toCsv, startContestManually, endContestManually } = require('../services/miningContestService');
+const { getContestHistory, getContestById, toCsv } = require('../services/miningContestService');
 const { getRecentActivity } = require('../services/streamService');
 const analyticsService = require('../services/analyticsService');
 
@@ -482,33 +482,6 @@ router.get('/mining-contest/history', async (req, res) => {
   }
 });
 
-// Explicit manual trigger — starting a round is no longer tied to the
-// mining_contest_enabled toggle (see miningContestService.js). Refuses
-// with a 400 if a round is already active.
-router.post('/mining-contest/start', async (req, res) => {
-  try {
-    await startContestManually();
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
-  }
-});
-
-// Force-closes the current round right now instead of waiting for its
-// scheduled end — pays out winners, sends the results image, and
-// posts to the announcement channel immediately, same as a normal
-// scheduled finalization (see miningContestService.endContestManually).
-// This is irreversible: prizes get credited and DMs get sent the
-// moment this runs.
-router.post('/mining-contest/end', async (req, res) => {
-  try {
-    await endContestManually();
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
-  }
-});
-
 router.get('/mining-contest/:id/download', async (req, res) => {
   try {
     const contest = await getContestById(req.params.id);
@@ -518,21 +491,6 @@ router.get('/mining-contest/:id/download', async (req, res) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="mining-contest-${contest.id}.csv"`);
     res.send(toCsv(contest));
-  } catch (err) {
-    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
-  }
-});
-
-// The shareable results graphic (contestImageService.js) — same one
-// DMed to the winners and optionally posted to the public announcement
-// channel, served here so the admin can preview/download it too (e.g.
-// to post it manually somewhere the bot itself isn't a member of).
-router.get('/mining-contest/:id/image', async (req, res) => {
-  try {
-    const image = await getContestImage(req.params.id);
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Disposition', `inline; filename="mining-contest-${req.params.id}.png"`);
-    res.send(Buffer.from(image));
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }

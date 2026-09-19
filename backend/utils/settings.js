@@ -291,12 +291,6 @@ const SETTING_DEFS = {
   mining_contest_prize_1st: { type: 'number', default: 500, min: 0 },
   mining_contest_prize_2nd: { type: 'number', default: 300, min: 0 },
   mining_contest_prize_3rd: { type: 'number', default: 150, min: 0 },
-  // Optional: a Telegram channel/group chat ID (e.g. "-100123456789")
-  // the bot posts the results IMAGE to automatically once a round
-  // finalizes — for public promotion/virality. Leave blank to skip
-  // public posting; winners are always DMed their own copy regardless
-  // of this setting. The bot must already be an admin of that chat.
-  mining_contest_announce_chat_id: { type: 'string', default: '' },
 
   // --- Anti-bot-farm gating (referral qualification + withdrawal channel gate) ---
   // Comma-separated Telegram channel usernames/IDs (e.g.

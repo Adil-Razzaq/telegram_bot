@@ -17,25 +17,4 @@ async function sendTelegramMessage(chatId, text, { parseMode, replyMarkup } = {}
   return data;
 }
 
-// Sends an image Buffer (e.g. a generated contest-results graphic) as
-// a photo message, with the same optional caption/keyboard a text
-// message can carry. Telegram's sendPhoto needs multipart/form-data
-// for a raw file upload — Node 18+'s global FormData/Blob handle that
-// without any extra dependency.
-async function sendTelegramPhoto(chatId, imageBuffer, { caption, parseMode, replyMarkup, filename = 'image.png' } = {}) {
-  const form = new FormData();
-  form.append('chat_id', String(chatId));
-  if (caption) form.append('caption', caption);
-  if (parseMode) form.append('parse_mode', parseMode);
-  if (replyMarkup) form.append('reply_markup', JSON.stringify(replyMarkup));
-  form.append('photo', new Blob([imageBuffer], { type: 'image/png' }), filename);
-
-  const res = await fetch(`${TELEGRAM_API}/sendPhoto`, { method: 'POST', body: form });
-  const data = await res.json();
-  if (!data.ok) {
-    throw new Error(data.description || 'Telegram API returned an error');
-  }
-  return data;
-}
-
-module.exports = { sendTelegramMessage, sendTelegramPhoto };
+module.exports = { sendTelegramMessage };

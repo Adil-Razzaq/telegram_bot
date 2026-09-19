@@ -1,8 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { client } = require('../db/db');
 const { getAllSettings } = require('../utils/settings');
-const { sendTelegramMessage, sendTelegramPhoto } = require('../utils/telegram');
-const { generateResultsImage } = require('./contestImageService');
+const { sendTelegramMessage } = require('../utils/telegram');
 
 // --- Mining Contest ---
 // A recurring, admin-configured prize leaderboard ranked by ACTIVE
@@ -133,18 +132,6 @@ async function finalizeContest(contest) {
     };
   });
 
-  // Generated once and reused for every winner DM plus the public
-  // announcement post below, rather than re-rendering per recipient.
-  let resultsImage = null;
-  try {
-    resultsImage = await generateResultsImage({ ...contest, results });
-  } catch (err) {
-    // A rendering failure must never block the actual prize payouts
-    // below — winners still get paid and a text DM either way, they
-    // just miss the shareable graphic for this one round.
-    console.error(`Contest results image generation failed for ${contest.id}:`, err.message);
-  }
-
   for (const winner of results.filter((r) => r.rank <= 3 && r.prize_awarded > 0)) {
     try {
       const tx = await client.transaction('write');
@@ -170,17 +157,11 @@ async function finalizeContest(contest) {
 
       const medal = winner.rank === 1 ? '🥇' : winner.rank === 2 ? '🥈' : '🥉';
       const place = winner.rank === 1 ? '1st' : winner.rank === 2 ? '2nd' : '3rd';
-      const caption = `${medal} <b>Congratulations!</b> You placed <b>${place}</b> in the Active Referral Contest with ${winner.active_referrals} active referrals — <b>+${winner.prize_awarded} ADLX</b> has been added to your balance!\n\nShare this to show off your win 🎉`;
-
-      // The image IS the shareable/viral part — a winner is far more
-      // likely to repost an actual graphic than a plain text message.
-      // Falls back to text-only if the image failed to generate above,
-      // so a rendering bug never costs a winner their notification.
-      if (resultsImage) {
-        await sendTelegramPhoto(winner.telegram_id, resultsImage, { caption, parseMode: 'HTML' });
-      } else {
-        await sendTelegramMessage(winner.telegram_id, caption, { parseMode: 'HTML' });
-      }
+      await sendTelegramMessage(
+        winner.telegram_id,
+        `${medal} <b>Congratulations!</b> You placed <b>${place}</b> in the Active Referral Contest with ${winner.active_referrals} active referrals — <b>+${winner.prize_awarded} ADLX</b> has been added to your balance!`,
+        { parseMode: 'HTML' }
+      );
     } catch (err) {
       // A failed DM (blocked bot, etc.) must never block the payout
       // that already committed above, or the next winner in this loop.
@@ -188,26 +169,9 @@ async function finalizeContest(contest) {
     }
   }
 
-  // Optional public promotion — posts the same graphic to an
-  // admin-configured channel/group so it isn't only ever seen by the
-  // 3 winners. Never lets a failure here (bot not admin of that chat,
-  // bad chat ID, etc.) affect anything above, which has already fully
-  // committed by this point.
-  try {
-    const settings = await getAllSettings();
-    if (resultsImage && settings.mining_contest_announce_chat_id) {
-      await sendTelegramPhoto(settings.mining_contest_announce_chat_id, resultsImage, {
-        caption: '🏆 <b>Active Referral Contest — Round Results</b>',
-        parseMode: 'HTML',
-      });
-    }
-  } catch (err) {
-    console.error(`Mining contest public announcement failed for ${contest.id}:`, err.message);
-  }
-
   await client.execute({
-    sql: `UPDATE mining_contests SET status = 'completed', results = ?, results_image = ? WHERE id = ?`,
-    args: [JSON.stringify(results), resultsImage, contest.id],
+    sql: `UPDATE mining_contests SET status = 'completed', results = ? WHERE id = ?`,
+    args: [JSON.stringify(results), contest.id],
   });
 }
 
@@ -237,75 +201,31 @@ async function startNewContest(settings) {
   });
 }
 
-// Runs on a timer (server.js) purely to FINALIZE a round once its time
-// is up — pay the top 3, freeze results, DM winners. It deliberately
-// does NOT auto-start the next round anymore: starting a round is a
-// separate, explicit admin action (see startContestManually) so
-// flipping `mining_contest_enabled` on/off only ever controls whether
-// an existing round is shown in the app, never whether a new one
-// begins. This avoids rounds silently kicking off back-to-back the
-// moment one finishes, or the instant an admin re-enables the display
-// toggle.
 async function ensureActiveMiningContest() {
   try {
+    const settings = await getAllSettings();
     const active = await getActiveContest();
-    if (!active) return;
 
-    const endsAtMs = new Date(active.ends_at + 'Z').getTime();
-    if (Date.now() >= endsAtMs) {
-      await finalizeContest(active);
+    if (active) {
+      const endsAtMs = new Date(active.ends_at + 'Z').getTime();
+      if (Date.now() >= endsAtMs) {
+        await finalizeContest(active);
+        if (settings.mining_contest_enabled) await startNewContest(settings);
+      }
+      return;
     }
+
+    if (settings.mining_contest_enabled) await startNewContest(settings);
   } catch (err) {
     console.error('ensureActiveMiningContest failed:', err.message);
   }
-}
-
-// Explicit admin action — the ONLY way a new round now begins. Refuses
-// to start one while a round is already active, so an accidental
-// double-click can't silently orphan the current round's remaining
-// time/standings.
-async function startContestManually() {
-  const active = await getActiveContest();
-  if (active) {
-    const err = new Error('A round is already running — wait for it to finish, or it will finalize on its own once its time is up.');
-    err.statusCode = 400;
-    throw err;
-  }
-  const settings = await getAllSettings();
-  await startNewContest(settings);
-}
-
-// Explicit admin action to close out the current round right now,
-// instead of waiting for its scheduled ends_at. ends_at is moved back
-// to the current moment FIRST (rather than just calling
-// finalizeContest on the unmodified row) so two things stay accurate:
-// the standings query's own end-of-window cutoff, and the round dates
-// shown in the results image/CSV — both would otherwise still say the
-// original future end date even though the round actually stopped
-// today.
-async function endContestManually() {
-  const active = await getActiveContest();
-  if (!active) {
-    const err = new Error('No round is currently running.');
-    err.statusCode = 400;
-    throw err;
-  }
-  await client.execute({ sql: `UPDATE mining_contests SET ends_at = datetime('now') WHERE id = ?`, args: [active.id] });
-  const updated = await getActiveContest();
-  await finalizeContest(updated);
 }
 
 // --- Admin: history + public sharing ---
 
 async function getContestHistory({ limit = 20 } = {}) {
   const res = await client.execute({
-    sql: `
-      SELECT id, starts_at, ends_at, duration_days, active_referral_cycles,
-             min_active_referrals_1st, min_active_referrals_2nd, min_active_referrals_3rd,
-             prize_1st, prize_2nd, prize_3rd, status, results, created_at,
-             results_image IS NOT NULL AS has_image
-      FROM mining_contests ORDER BY created_at DESC LIMIT ?
-    `,
+    sql: `SELECT * FROM mining_contests ORDER BY created_at DESC LIMIT ?`,
     args: [limit],
   });
   return res.rows.map((row) => ({
@@ -315,15 +235,7 @@ async function getContestHistory({ limit = 20 } = {}) {
 }
 
 async function getContestById(id) {
-  const res = await client.execute({
-    sql: `
-      SELECT id, starts_at, ends_at, duration_days, active_referral_cycles,
-             min_active_referrals_1st, min_active_referrals_2nd, min_active_referrals_3rd,
-             prize_1st, prize_2nd, prize_3rd, status, results, created_at
-      FROM mining_contests WHERE id = ?
-    `,
-    args: [id],
-  });
+  const res = await client.execute({ sql: `SELECT * FROM mining_contests WHERE id = ?`, args: [id] });
   const row = res.rows[0];
   if (!row) {
     const err = new Error('Contest not found');
@@ -331,21 +243,6 @@ async function getContestById(id) {
     throw err;
   }
   return { ...row, results: row.results ? JSON.parse(row.results) : null };
-}
-
-// The one place that actually needs the raw image bytes — kept
-// separate from getContestById so the BLOB is never pulled into
-// memory for requests that don't need it (the history list, the CSV
-// export).
-async function getContestImage(id) {
-  const res = await client.execute({ sql: `SELECT results_image FROM mining_contests WHERE id = ?`, args: [id] });
-  const row = res.rows[0];
-  if (!row || !row.results_image) {
-    const err = new Error('No image available for this contest');
-    err.statusCode = 404;
-    throw err;
-  }
-  return row.results_image;
 }
 
 // Plain CSV — opens in Excel/Sheets and is exactly the kind of file
@@ -361,11 +258,8 @@ function toCsv(contest) {
 
 module.exports = {
   ensureActiveMiningContest,
-  startContestManually,
-  endContestManually,
   getCurrentContestStatus,
   getContestHistory,
   getContestById,
-  getContestImage,
   toCsv,
 };

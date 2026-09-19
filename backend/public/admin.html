@@ -122,12 +122,6 @@
   <h2>Active Referral Contest</h2>
   <div class="card">
     <p class="muted">Ranked by active referrals — people someone referred DURING the round who've since completed enough mining cycles to count as "active" (threshold set under Settings → Active Referral Contest below, along with round length and prizes). The current round is always listed first; finished rounds are frozen and downloadable to share publicly.</p>
-    <p class="muted">Starting a round is manual — the "enabled" setting below only controls whether a running round is shown in the app. Nothing starts automatically.</p>
-    <div class="row">
-      <button type="button" onclick="startMiningContest()">Start New Round</button>
-      <button type="button" class="danger" onclick="endMiningContest()">End Round Now</button>
-    </div>
-    <div id="miningContestStatus"></div>
     <div id="miningContestList">Loading…</div>
   </div>
 
@@ -340,7 +334,7 @@
     try {
       const { contests } = await adminFetch('/admin/mining-contest/history');
       if (contests.length === 0) {
-        listEl.innerHTML = '<p class="muted">No round has run yet — click "Start New Round" above whenever you\'re ready.</p>';
+        listEl.innerHTML = '<p class="muted">No contest has run yet — turn it on under Settings → Active Referral Contest below.</p>';
         return;
       }
       listEl.innerHTML = contests.map((c) => {
@@ -365,42 +359,13 @@
               ${top.map((r) => `<div>${medal[r.rank] || r.rank + '.'} ${r.display_name} — ${r.active_referrals} active referrals (${r.prize_awarded > 0 ? '+' + r.prize_awarded + ' ADLX' : 'below minimum — no prize'})</div>`).join('')}
               <div class="row" style="margin-top:8px">
                 <button type="button" class="secondary" onclick="downloadContestCsv('${c.id}')">Download full results (CSV)</button>
-                ${c.has_image ? `<button type="button" class="secondary" onclick="viewContestImage('${c.id}')">View shareable image</button>` : ''}
               </div>
-              ${c.has_image ? `<div id="contest-image-${c.id}" style="margin-top:8px"></div>` : ''}
             `}
         </div>
       `;
       }).join('');
     } catch (e) {
       listEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
-    }
-  }
-
-  async function startMiningContest() {
-    const statusEl = document.getElementById('miningContestStatus');
-    statusEl.innerHTML = '<p class="muted">Starting…</p>';
-    try {
-      await adminFetch('/admin/mining-contest/start', { method: 'POST' });
-      statusEl.innerHTML = '<p class="status-msg ok">Round started — now visible to users with the setting enabled.</p>';
-      await loadMiningContests();
-    } catch (e) {
-      statusEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
-    }
-  }
-
-  async function endMiningContest() {
-    if (!confirm('End the current round right now? This immediately pays out qualifying winners, DMs them the results image, and cannot be undone.')) {
-      return;
-    }
-    const statusEl = document.getElementById('miningContestStatus');
-    statusEl.innerHTML = '<p class="muted">Ending round and paying out winners…</p>';
-    try {
-      await adminFetch('/admin/mining-contest/end', { method: 'POST' });
-      statusEl.innerHTML = '<p class="status-msg ok">Round ended — winners have been paid and notified.</p>';
-      await loadMiningContests();
-    } catch (e) {
-      statusEl.innerHTML = `<p class="status-msg err">${e.message}</p>`;
     }
   }
 
@@ -429,35 +394,6 @@
       URL.revokeObjectURL(url);
     } catch (e) {
       alert(e.message);
-    }
-  }
-
-  // Same authenticated-fetch requirement as the CSV download above (a
-  // plain <img src> can't send the x-admin-key header) — fetched once
-  // and rendered inline so the admin can preview the exact graphic
-  // that was DMed to the winners before deciding whether to post it
-  // publicly themselves.
-  async function viewContestImage(id) {
-    const container = document.getElementById(`contest-image-${id}`);
-    container.innerHTML = '<p class="muted">Loading…</p>';
-    try {
-      const res = await fetch(`${API_BASE}/admin/mining-contest/${id}/image`, {
-        headers: { 'x-admin-key': getKey() },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to load image');
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      container.innerHTML = `
-        <img src="${url}" style="max-width:100%; border-radius:10px; display:block" />
-        <div class="row" style="margin-top:8px">
-          <a href="${url}" download="mining-contest-${id}.png"><button type="button" class="secondary">Download PNG</button></a>
-        </div>
-      `;
-    } catch (e) {
-      container.innerHTML = `<p class="status-msg err">${e.message}</p>`;
     }
   }
 
@@ -712,7 +648,7 @@
     streak_reminder_enabled: 'Streak: send "about to break" reminder DM',
     streak_reminder_hour_utc: 'Streak: reminder hour (UTC, 0-23)',
     streak_reminder_message: 'Streak: reminder DM text — bold tags are rendered (Telegram HTML); {day} and {points} get substituted',
-    mining_contest_enabled: 'Active Referral Contest: show in app (does NOT start a round — use the Start New Round button above)',
+    mining_contest_enabled: 'Active Referral Contest: enabled',
     mining_contest_duration_days: 'Active Referral Contest: round length (days)',
     mining_contest_active_referral_cycles: 'Active Referral Contest: mining cycles a referral needs to count as "active"',
     mining_contest_min_active_referrals_1st: 'Active Referral Contest: min active referrals to WIN 1st (0 = no floor)',
@@ -721,7 +657,6 @@
     mining_contest_prize_1st: 'Active Referral Contest: 1st place prize (ADLX)',
     mining_contest_prize_2nd: 'Active Referral Contest: 2nd place prize (ADLX)',
     mining_contest_prize_3rd: 'Active Referral Contest: 3rd place prize (ADLX)',
-    mining_contest_announce_chat_id: 'Active Referral Contest: public announcement channel/group chat ID (blank = don\'t auto-post)',
   };
 
   // Groups every setting key above into a labeled, collapsible section
@@ -737,7 +672,7 @@
     'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled', 'referral_join_popup_title', 'referral_join_popup_message'],
     'Invite Gift': ['invite_gift_adsgram_block_id', 'invite_gift_new_user_points', 'invite_gift_referrer_points', 'invite_share_banner_image_url', 'invite_gift_popup_title', 'invite_gift_popup_message', 'invite_gift_popup_button_text'],
     'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled', 'streak_reminder_enabled', 'streak_reminder_hour_utc', 'streak_reminder_message'],
-    'Active Referral Contest': ['mining_contest_enabled', 'mining_contest_duration_days', 'mining_contest_active_referral_cycles', 'mining_contest_min_active_referrals_1st', 'mining_contest_min_active_referrals_2nd', 'mining_contest_min_active_referrals_3rd', 'mining_contest_prize_1st', 'mining_contest_prize_2nd', 'mining_contest_prize_3rd', 'mining_contest_announce_chat_id'],
+    'Active Referral Contest': ['mining_contest_enabled', 'mining_contest_duration_days', 'mining_contest_active_referral_cycles', 'mining_contest_min_active_referrals_1st', 'mining_contest_min_active_referrals_2nd', 'mining_contest_min_active_referrals_3rd', 'mining_contest_prize_1st', 'mining_contest_prize_2nd', 'mining_contest_prize_3rd'],
     'Withdrawals': ['withdrawal_fee_flat_points', 'withdrawal_fee_percent', 'min_withdrawal_points', 'withdrawal_ads_enabled', 'live_payouts_compact_mode', 'payout_channel_url'],
     'Ads — Reward Actions (Spin/Miner/Referral)': ['action_ads_enabled', 'action_ads_network'],
     'Ads — Passive / Auto': ['auto_ad_enabled', 'auto_ad_first_enabled', 'auto_ad_network', 'auto_ad_first_delay_seconds', 'auto_ad_interval_seconds', 'auto_ad_frequency', 'auto_ad_capping_hours'],
