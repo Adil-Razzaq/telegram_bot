@@ -24,6 +24,8 @@ function displayName(row) {
 
 async function getTopReferrers({ limit = 100, telegramId } = {}) {
   const activeCycles = await getSetting('mining_contest_active_referral_cycles');
+  const subtitleTemplate = await getSetting('leaderboard_subtitle_text');
+  const subtitle = (subtitleTemplate || '').replace('{cycles}', activeCycles);
   const res = await client.execute({
     sql: `SELECT u.telegram_id, u.username, COUNT(r.telegram_id) AS referral_count
           FROM users u
@@ -69,7 +71,7 @@ async function getTopReferrers({ limit = 100, telegramId } = {}) {
     you = { rank: ownRank, display_name: 'You', referral_count: ownCount, is_you: true };
   }
 
-  return { leaderboard, you, active_referral_cycles: activeCycles };
+  return { leaderboard, you, active_referral_cycles: activeCycles, subtitle };
 }
 
 module.exports = { getTopReferrers };

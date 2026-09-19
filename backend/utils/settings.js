@@ -297,6 +297,25 @@ const SETTING_DEFS = {
   // public posting; winners are always DMed their own copy regardless
   // of this setting. The bot must already be an admin of that chat.
   mining_contest_announce_chat_id: { type: 'string', default: '' },
+  // Sent to the channel above the moment a new round STARTS (see
+  // startNewContest in miningContestService.js) — separate from the
+  // results announcement, which only fires when a round ENDS.
+  // {days}/{cycles}/{prize1}/{prize2}/{prize3} get substituted.
+  mining_contest_start_message: {
+    type: 'string',
+    default:
+      '🎉 <b>A new Active Referral Contest round has started!</b>\n\n⏱ Duration: {days} days\n🎯 Get a referral to {cycles}+ mining cycles to count as active\n🏆 Prizes: 👑 {prize1} · 🥈 {prize2} · 🥉 {prize3} ADLX\n\nRefer friends and help them get active to climb the leaderboard!',
+  },
+  // Subtitle shown under "Leaderboard" in the app — {cycles} substituted.
+  leaderboard_subtitle_text: {
+    type: 'string',
+    default: 'Ranked by active referrals — referred users who have completed {cycles}+ mining cycles.',
+  },
+  // Subtitle shown under "Active Referral Contest" in the app — {cycles} substituted.
+  mining_contest_subtitle_text: {
+    type: 'string',
+    default: 'Ranked by active referrals — people you referred this round who have completed {cycles}+ mining cycles.',
+  },
 
   // --- Anti-bot-farm gating (referral qualification + withdrawal channel gate) ---
   // Comma-separated Telegram channel usernames/IDs (e.g.

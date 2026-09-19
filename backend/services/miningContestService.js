@@ -104,6 +104,7 @@ async function getCurrentContestStatus({ telegramId, limit = 20 } = {}) {
     ends_at: contest.ends_at,
     duration_days: contest.duration_days,
     active_referral_cycles: contest.active_referral_cycles,
+    subtitle: (settings.mining_contest_subtitle_text || '').replace('{cycles}', contest.active_referral_cycles),
     seconds_remaining: Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000)),
     prizes: { first: contest.prize_1st, second: contest.prize_2nd, third: contest.prize_3rd },
     min_active_referrals: {
@@ -235,6 +236,25 @@ async function startNewContest(settings) {
       settings.mining_contest_prize_3rd,
     ],
   });
+
+  // Public "a new round just started" announcement — separate from the
+  // results announcement in finalizeContest, which only fires once a
+  // round ENDS. Posted to the same channel, since it's the same
+  // audience; never blocks the round actually starting if this fails
+  // (bad chat ID, bot not admin there, etc.) or if no channel is set.
+  try {
+    if (settings.mining_contest_announce_chat_id) {
+      const text = (settings.mining_contest_start_message || '')
+        .replace('{days}', days)
+        .replace('{cycles}', settings.mining_contest_active_referral_cycles)
+        .replace('{prize1}', settings.mining_contest_prize_1st)
+        .replace('{prize2}', settings.mining_contest_prize_2nd)
+        .replace('{prize3}', settings.mining_contest_prize_3rd);
+      await sendTelegramMessage(settings.mining_contest_announce_chat_id, text, { parseMode: 'HTML' });
+    }
+  } catch (err) {
+    console.error('Mining contest start announcement failed:', err.message);
+  }
 }
 
 // Runs on a timer (server.js) purely to FINALIZE a round once its time

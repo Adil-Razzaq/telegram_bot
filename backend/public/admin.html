@@ -722,6 +722,9 @@
     mining_contest_prize_2nd: 'Active Referral Contest: 2nd place prize (ADLX)',
     mining_contest_prize_3rd: 'Active Referral Contest: 3rd place prize (ADLX)',
     mining_contest_announce_chat_id: 'Active Referral Contest: public announcement channel/group chat ID (blank = don\'t auto-post)',
+    mining_contest_start_message: 'Active Referral Contest: "round started" public announcement — {days}, {cycles}, {prize1}, {prize2}, {prize3} get substituted; bold tags rendered',
+    leaderboard_subtitle_text: 'Leaderboard: description text shown under the heading — {cycles} gets substituted',
+    mining_contest_subtitle_text: 'Active Referral Contest: description text shown under the heading — {cycles} gets substituted',
   };
 
   // Groups every setting key above into a labeled, collapsible section
@@ -734,10 +737,10 @@
     'General & Anti-Abuse': ['points_per_usd', 'official_channels', 'app_open_require_channel_join', 'referral_require_channel_join', 'withdrawal_require_channel_join', 'referral_qualify_miner_cycles', 'device_restriction_title', 'device_restriction_message'],
     'Spin': ['spin_entry_fee', 'spin_free_spins', 'spin_payout_1', 'spin_payout_2', 'spin_payout_3', 'spin_payout_4', 'spin_payout_5', 'spin_payout_6', 'spin_ads_enabled'],
     'Miner': ['miner_daily_points', 'miner_cycles_per_day', 'miner_cycle_hours', 'miner_cycle_complete_message', 'miner_idle_start_message', 'miner_boost_multiplier', 'miner_boost_duration_minutes', 'miner_start_ads_enabled', 'miner_claim_ads_enabled', 'miner_boost_ads_enabled'],
-    'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled', 'referral_join_popup_title', 'referral_join_popup_message'],
+    'Referral': ['referral_reward', 'referral_daily_claim_cap', 'referral_claim_cooldown_seconds', 'referral_claim_ads_enabled', 'referral_join_popup_title', 'referral_join_popup_message', 'leaderboard_subtitle_text'],
     'Invite Gift': ['invite_gift_adsgram_block_id', 'invite_gift_new_user_points', 'invite_gift_referrer_points', 'invite_share_banner_image_url', 'invite_gift_popup_title', 'invite_gift_popup_message', 'invite_gift_popup_button_text'],
     'Streak': ['streak_day1_points', 'streak_day2_points', 'streak_day3_points', 'streak_day4_points', 'streak_day5_points', 'streak_day6_points', 'streak_day7_points', 'streak_ad_network', 'streak_claim_ads_enabled', 'streak_reminder_enabled', 'streak_reminder_hour_utc', 'streak_reminder_message'],
-    'Active Referral Contest': ['mining_contest_enabled', 'mining_contest_duration_days', 'mining_contest_active_referral_cycles', 'mining_contest_min_active_referrals_1st', 'mining_contest_min_active_referrals_2nd', 'mining_contest_min_active_referrals_3rd', 'mining_contest_prize_1st', 'mining_contest_prize_2nd', 'mining_contest_prize_3rd', 'mining_contest_announce_chat_id'],
+    'Active Referral Contest': ['mining_contest_enabled', 'mining_contest_duration_days', 'mining_contest_active_referral_cycles', 'mining_contest_min_active_referrals_1st', 'mining_contest_min_active_referrals_2nd', 'mining_contest_min_active_referrals_3rd', 'mining_contest_prize_1st', 'mining_contest_prize_2nd', 'mining_contest_prize_3rd', 'mining_contest_announce_chat_id', 'mining_contest_start_message', 'mining_contest_subtitle_text'],
     'Withdrawals': ['withdrawal_fee_flat_points', 'withdrawal_fee_percent', 'min_withdrawal_points', 'withdrawal_ads_enabled', 'live_payouts_compact_mode', 'payout_channel_url'],
     'Ads — Reward Actions (Spin/Miner/Referral)': ['action_ads_enabled', 'action_ads_network'],
     'Ads — Passive / Auto': ['auto_ad_enabled', 'auto_ad_first_enabled', 'auto_ad_network', 'auto_ad_first_delay_seconds', 'auto_ad_interval_seconds', 'auto_ad_frequency', 'auto_ad_capping_hours'],

@@ -125,10 +125,7 @@ export default function Leaderboard() {
           <h2 className="page-title" style={{ marginTop: 24 }}>
             Active Referral Contest
           </h2>
-          <p className="leaderboard-subtitle">
-            Ranked by active referrals — people you referred this round who've completed{' '}
-            {contest.active_referral_cycles}+ mining cycles.
-          </p>
+          <p className="leaderboard-subtitle">{contest.subtitle}</p>
 
           <div className="contest-card">
             <div className="contest-timer">
@@ -228,10 +225,7 @@ export default function Leaderboard() {
       <h2 className="page-title" style={{ marginTop: 24 }}>
         Leaderboard
       </h2>
-      <p className="leaderboard-subtitle">
-        Ranked by active referrals — referred users who've completed {board.active_referral_cycles}+ mining
-        cycles.
-      </p>
+      <p className="leaderboard-subtitle">{board.subtitle}</p>
 
       {board.you && (
         <div className="leaderboard-row leaderboard-you">
