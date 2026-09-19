@@ -298,6 +298,12 @@ CREATE TABLE IF NOT EXISTS mining_contests (
     -- top-N rows (telegram_id, username, active_referrals, rank,
     -- prize_awarded) — the permanent, shareable historical record.
     results TEXT,
+    -- The generated shareable results PNG (contestImageService.js),
+    -- stored as a BLOB rather than a file on disk — keeps this fully
+    -- self-contained in the same database as everything else, with no
+    -- separate filesystem path/permissions/cleanup to manage on
+    -- whatever server this runs on. NULL until the round finalizes.
+    results_image BLOB,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
